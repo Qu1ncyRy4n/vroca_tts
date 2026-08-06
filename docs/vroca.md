@@ -9,9 +9,9 @@
 ```
 ┌───────────────────────────────────────────────────────────┐
 │                    LLM Agents / CLI / Scripts             │
-│   (echo "done" > /tmp/tts-speak | tts say "..." | socket) │
+│                 (tts say "..." | socket)                  │
 └──────────────────────────────┬────────────────────────────┘
-                               │ IPC (UNIX Socket / Spool)
+                               │ IPC (UNIX Socket)
 ┌──────────────────────────────▼────────────────────────────┐
 │                    Vroca Daemon (tts-daemon)              │
 │  - Multi-Engine Synthesis (Kokoro / Supertonic / LibriTTS)│
@@ -25,6 +25,21 @@
 │  - Center Fixation Column  │
 └────────────────────────────┘
 ```
+
+### Rust Migration Plan
+
+Vroca uses a staged replacement plan. The Python implementation remains the
+behavior source and usable production path while the Rust implementation is
+built and tested. Rust must reach an explicitly reviewed parity gate before
+deployment switches to Rust. Python retirement is a later, separate change.
+
+Parity protects the public behavior that users and local programs rely on. It
+does not require copying accidental Python behavior. Deliberate improvements
+may replace Python behavior when the compatibility consequence is documented
+and approved.
+
+The detailed Rust design, compatibility inventory, and unresolved decisions
+are maintained in [`rust-design.md`](rust-design.md).
 
 ---
 
@@ -74,9 +89,9 @@ The Vroca daemon listens on `$XDG_RUNTIME_DIR/tts.sock` (`0o666` permissions). A
 - **RSVP (Rapid Serial Visual Presentation):** Single-word presentation with Optimal Recognition Point (ORP) fixed column alignment.
 - **Side-Scrolling RSVP (`scroll_rsvp`):** Horizontal sliding window of context words with exact center-column fixation alignment.
 
-### C. Text Normalization & Agent Spooling
+### C. Text Normalization & Local Agent Input
 - **Markdown Text Normalizer:** Strips headings (`#`), bold/italic formatting, links, bullet points, and code blocks before sentence splitting so speech sounds like natural prose.
-- **Watched Spool File:** `/tmp/tts-speak` (`0o666` permissions) for agent write triggers (`echo "..." > /tmp/tts-speak`).
+- **Local Agent Input:** Local agents and scripts submit speech through the `tts` CLI or UNIX socket. A watched spool file is not implemented.
 
 ---
 
@@ -86,4 +101,4 @@ The Vroca daemon listens on `$XDG_RUNTIME_DIR/tts.sock` (`0o666` permissions). A
 2. **Interactive Copy & Paste Reader GUI:** Floating reader pad with live sentence highlighting, paragraph bookmarking, and speed ramping.
 3. **Voice Character Creator:** Persona tuning (noise scale, pitch offset, speech rate, emotion triggers).
 4. **OCR & LaTeX Normalization:** Screenshot-to-speech pipeline converting mathematical notation (LaTeX) and terminal code snippets into readable spoken prose.
-5. **Parallel Rust Daemon (`rust_impl/`):** High-performance Rust implementation with PyO3 bindings.
+5. **Staged Rust Replacement (`rust_impl/`):** Build and dogfood the Linux Rust CLI, daemon, overlay, and panel behind compatibility tests before switching deployment. Retire Python only after the Rust path is stable.
