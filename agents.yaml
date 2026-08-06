@@ -1,0 +1,49 @@
+sources:
+  cdint: ~/dev/cdint/Agents/libraries/cdint
+  personal: ~/dev/cdint/Agents/libraries/personal
+  vroca: ./agent-library
+vars:
+  repo_name: vroca_tts
+output: AGENTS.md
+doc:
+  - heading: Identity
+    children:
+      - Role: cdint:shared-baseline/identity/role
+      - Project Overview: vroca:vroca/project-overview
+      - Design Of Record: vroca:vroca/design-of-record
+  - heading: Vroca Boundaries
+    children:
+      - Deployment Boundary: vroca:vroca/deployment-boundary
+      - Rust Migration: vroca:vroca/rust-migration
+      - Service Lifecycle: vroca:vroca/service-lifecycle
+  - heading: Workflow
+    children:
+      - Focused Change Loop: cdint:shared-baseline/instructions/focused-change-loop
+      - Documentation: cdint:shared-baseline/instructions/documentation
+      - Lightweight Escalation: cdint:process/lightweight-escalation
+      - Diff Discipline: cdint:engineering/reviewability/diff-discipline
+      - User Edits: cdint:engineering/reviewability/user-edits
+      - Public Surfaces: cdint:engineering/reviewability/breaking-surfaces
+  - heading: Stack
+    children:
+      - Python Nix Dependencies: personal:lang/python/nix-dependency-management
+      - Python Validation: personal:lang/python/validation
+      - Nix Develop: personal:lang/nix/nix-develop
+      - Nix Flakes: personal:lang/nix/flakes
+      - Rust Development: personal:lang/rust/development
+      - Rust API Shape: personal:lang/rust/api-shape
+      - Rust Dependencies: personal:lang/rust/dependencies
+      - Rust Tests: personal:lang/rust/tests
+  - heading: Constraints
+    children:
+      - Runtime Artifacts: cdint:engineering/runtime-artifacts/repository-cleanliness
+      - Temporary Paths: cdint:engineering/runtime-artifacts/temporary-paths
+      - Shell Errors: cdint:engineering/error-handling/shell-commands
+  - heading: Validation
+    children:
+      - Vroca Commands: vroca:vroca/validation
+      - Risk Scaled Checks: cdint:engineering/test-strategy/scope
+  - heading: Communication
+    children:
+      - TTS Friendly Chat: personal:communication/accessibility/tts-friendly-chat
+      - Clear Handoff: cdint:shared-baseline/format/clear-handoff
