@@ -11,7 +11,11 @@ Vroca is a text-to-speech and assistive reading framework. The current implement
 
 ## Design Of Record
 
-`docs/vroca.md` is the design of record for architecture and public surfaces. Before changing behavior, compare that document with the Python implementation and call out drift instead of assuming the docs are current.
+`docs/vroca.md` is the design of record for architecture and public surfaces. It states the public contract, not what the Python code currently does. Before changing behavior, compare that document with the Python implementation and call out drift instead of assuming the docs are current.
+
+`docs/rust-spec.md` is the normative specification for the Rust implementation. It owns every migration decision, records the Python-versus-contract mismatch register with stable `D` and `N` identifiers, and lists the remaining open questions. Consult it before making any Rust design choice; do not resolve an item it marks Open by picking whatever looks conventional.
+
+`docs/legacy-compatibility.md` is the parity checklist and states the fixtures each legacy command needs before it may be called compatible.
 
 `docs/pickup_notes.md` is a working handoff and roadmap. `README.md` is a short orientation.
 
@@ -23,9 +27,9 @@ Deployment integration lives in `~/nix-dotfiles`, which is a separate ownership 
 
 ## Rust Migration
 
-Preserve the documented socket protocol, preference format, runtime state format, executable names, and systemd behavior during the Rust migration unless the user explicitly approves a compatibility change. Test both success and malformed-input paths.
+Preserve the documented socket protocol, preference format, runtime state format, executable names, and systemd behavior during the Rust migration unless the change is already approved in `docs/rust-spec.md`. That specification is the record of approved compatibility changes; several are approved, so treat it, not this instruction, as the current answer. Anything it does not cover still needs explicit approval. Test both success and malformed-input paths.
 
-Before substantial Rust implementation, record whether the migration is parallel, replacement, or staged replacement in `docs/vroca.md`. Follow the recorded plan.
+The migration is a **staged replacement**, recorded in `docs/vroca.md` and specified in `docs/rust-spec.md`. Python remains the usable path until Rust passes the reviewed parity gate in `docs/rust-spec.md` §9.2. The first Rust slice is bounded by §8 of that document; do not exceed it without a new decision.
 
 ## Service Lifecycle
 

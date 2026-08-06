@@ -42,6 +42,7 @@ doc:
   - heading: Validation
     children:
       - Vroca Commands: vroca:vroca/validation
+      - Approval-Sensitive Commands: vroca:vroca/approval-sensitive-commands
       - Risk Scaled Checks: cdint:engineering/test-strategy/scope
   - heading: Communication
     children:
