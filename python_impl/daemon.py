@@ -537,7 +537,10 @@ class Reader:
             ).voices)
         if self.engine == "zipvoice":
             return max(1, len(list_clone_refs()))
-        return ENGINES[self.engine]["voices"]
+        try:
+            return self._ensure().num_speakers or 1
+        except Exception:
+            return 1
 
     def set_speed(self, speed):
         self.speed = max(SPEED_MIN, min(SPEED_MAX, speed))
