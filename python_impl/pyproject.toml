@@ -1,0 +1,16 @@
+[project]
+name = "vroca-tts"
+version = "0.1.0"
+description = "Vroca Text-to-Speech synthesis and assistive reader"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "sherpa-onnx>=1.10.0",
+    "numpy>=1.24.0",
+    "pygobject>=3.44.0",
+    "pycairo>=1.23.0",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
