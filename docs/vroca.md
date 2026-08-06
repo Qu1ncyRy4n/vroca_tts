@@ -38,23 +38,44 @@ does not require copying accidental Python behavior. Deliberate improvements
 may replace Python behavior when the compatibility consequence is documented
 and approved.
 
-The detailed Rust design, compatibility inventory, and unresolved decisions
-are maintained in [`rust-design.md`](rust-design.md).
+The normative Rust specification, compatibility inventory, and unresolved
+decisions are maintained in [`rust-spec.md`](rust-spec.md).
+
+### Which Document Wins
+
+These documents answer different questions. Confusing them is how the drift
+below happened in the first place.
+
+| Question | Authority |
+|:---|:---|
+| What is the system *promised* to do? | This document. It is the public contract. |
+| What does the Python code *actually* do today? | [`rust-spec.md`](rust-spec.md) §5, the mismatch register. Where Python departs from the contract, the departure is recorded there with a `D` or `N` identifier and flagged inline in the table below. |
+| What must the Rust implementation build? | [`rust-spec.md`](rust-spec.md). It is normative and it owns every migration decision, including approved departures from this contract. |
+| Which behaviors still need migration fixtures? | [`legacy-compatibility.md`](legacy-compatibility.md). |
+
+This document does **not** describe the Python implementation. It describes the
+contract. Three rows below are marked where the current implementation does not
+honor it; the Rust decisions make the contract true rather than amending it.
 
 ---
 
 ## 2. UNIX Socket IPC API Reference
 
-The Vroca daemon listens on `$XDG_RUNTIME_DIR/tts.sock` (`0o666` permissions). Any agent or shell script can send plaintext commands:
+The Vroca daemon listens on `$XDG_RUNTIME_DIR/tts.sock`. Any agent or shell script can send plaintext commands.
+
+The socket itself is created mode `0o666`, but it lives inside the per-user
+runtime directory, which is mode `0700`. The effective trust boundary is
+therefore the **owning user**, not other local accounts. The permissive mode
+bits on the socket grant nothing and are retained only for compatibility.
 
 | Command | Arguments | Description |
 |:---|:---|:---|
-| `say <text>` / `speak <text>` | String | Clears active queue and immediately speaks text. |
+| `say <text>` / `speak <text>` | String | Clears active queue and immediately speaks text. **Python leaves waiting queue items intact — see D2.** |
 | `queue <text>` | String | Appends text block to the sequential speech queue. |
 | `read` | None | Reads current primary selection (or stops if currently reading). |
 | `stop` | None | Stops active speech and clears sentence cache. |
 | `clear` | None | Clears the speech queue and stops active audio. |
-| `skip` | None | Skips current queued item to advance to next in queue. |
+| `skip` | None | Skips current queued item to advance to next in queue. **Python drops the next waiting item instead — see D3.** |
 | `toggle` | None | Pauses or resumes playback in place (`Super+X`). |
 | `next` / `back` | None | Steps forward or backward by one sentence. |
 | `faster` / `slower` | None | Increases/decreases speed by `0.15x`. |
@@ -64,14 +85,27 @@ The Vroca daemon listens on `$XDG_RUNTIME_DIR/tts.sock` (`0o666` permissions). A
 | `aligner <name>` | `asr` or `energy` | Sets word alignment engine. |
 | `font_size <int>` | `12` – `72` | Sets RSVP overlay font size (pt). |
 | `words_visible <int>` | `1` – `15` | Sets surrounding context words in `scroll_rsvp` mode. |
-| `position <pos>` | `bottom`, `top`, `center` | Sets overlay screen anchor. |
+| `position <pos>` | `bottom`, `top`, `center` | Sets overlay screen anchor. In `rsvp` and `scroll_rsvp`, `bottom` currently renders identically to `center`. |
 | `mode` | None | Cycles overlay mode (`subtitle` -> `rsvp` -> `scroll_rsvp` -> `off`). |
-| `reset` / `reset_prefs` | None | Resets all settings to factory defaults. |
+| `reset` / `reset_prefs` | None | Resets all settings to factory defaults. **Python leaves `engine` unchanged — see N8.** |
 | `status` | None | Returns complete daemon state in JSON format. |
 | `catalogue` | None | Returns voice catalogue JSON for current engine. |
 | `preview <int>` | `sid` | Auditions a 1-sentence sample in voice `sid`. |
 | `unload` / `reload` | None | Drops ONNX model from memory or forces model reload. |
 | `quit` | None | Closes mpv IPC and terminates daemon. |
+
+### `tts` Client Behavior
+
+Two behaviors of the deployed `tts` shell client are not socket commands:
+
+| Invocation | Behavior |
+|:---|:---|
+| `tts` with no arguments | Sends `read`. |
+| `tts log` | Runs `journalctl --user -u tts -u tts-overlay -f`. Never contacts the socket. |
+
+The client also forwards trailing arguments only for `say`, `speak`, and
+`queue`. Other commands are sent without arguments, so `tts speed 1.2` sends a
+bare `speed`. Use the socket directly for those until the Rust CLI replaces it.
 
 ---
 
