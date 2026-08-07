@@ -92,20 +92,37 @@ hit it.
 **Cost:** small. Note that switching engines forces a model reload, so the reply
 must not pretend it was instant.
 
-### A4. Stop `daemon.py` edits from rebuilding the pitch tables — **done in repo**, needs a deployment change
+### A4. Stop `daemon.py` edits from rebuilding the pitch tables — **done in repo; deployment change now REQUIRED**
+
+> **Blocking.** Do not update the `vroca_tts` lock in `~/nix-dotfiles` until the
+> `tts.nix` line below is changed. `measure.py` now imports `engines`, which
+> `measureSrc` does not copy, so the `pitchTables` derivation fails with
+> `ModuleNotFoundError: No module named 'engines'`. Verified by reproducing the
+> derivation's inputs. This is not an optimization any more; it is a hard
+> dependency created by moving the code.
 
 `~/nix-dotfiles/home/tts.nix` builds `measureSrc` from `measure.py`,
-`daemon.py`, and `voices.py`, because `measure.py` imports `daemon` for
-`build_engine`. Any daemon edit therefore invalidates the derivation and
-re-measures 904 libritts voices, which is about a minute of synthesis per
-rebuild.
+`daemon.py`, and `voices.py`, because `measure.py` imported `daemon` for
+`build_engine`. Any daemon edit therefore invalidated the derivation and
+re-measured 904 libritts voices, about a minute of synthesis per rebuild.
 
-The fix is to extract engine construction out of `daemon.py` into an
-`engines.py` that both import. Then `measureSrc` no longer depends on the file
-that changes most often.
+Engine construction now lives in `engines.py`, which both `daemon.py` and
+`measure.py` import. `measureSrc` must copy that instead:
 
-**Cost:** small in this repo. The `tts.nix` half is a **separate deployment
-change requiring approval**.
+```diff
+   measureSrc = pkgs.runCommand "tts-measure-src" {} ''
+     mkdir -p $out
+-    cp ${src}/measure.py ${src}/daemon.py ${src}/voices.py $out/
++    cp ${src}/measure.py ${src}/engines.py ${src}/voices.py $out/
+   '';
+```
+
+After that, editing `daemon.py` no longer touches the pitch tables, which is the
+whole point. The daemon itself is unaffected either way: its `PYTHONPATH` is the
+whole `python_impl` directory, so it already sees `engines.py`.
+
+**Cost:** one line, in a repository with a separate ownership and activation
+boundary. Requires explicit approval.
 
 ### A5. Chunked synthesis for kokoro — medium, deferred
 
@@ -179,10 +196,10 @@ endpoint is the practical path on this hardware.
 
 ## Suggested Order
 
-1. ~~A1 volume, A2 same-engine multi-voice, A3 engine-qualified names,
-   A4 engine extraction~~ — **all implemented.** A4 needs one line changed in
-   `~/nix-dotfiles/home/tts.nix` to take effect: `measureSrc` should copy
-   `engines.py` instead of `daemon.py`.
+1. **Change the `measureSrc` line in `~/nix-dotfiles/home/tts.nix` (A4), then
+   update the `vroca_tts` lock and rebuild.** In that order. Updating the lock
+   first fails the build. A1 through A3 are implemented and ship with the same
+   update.
 2. **Rust stage 3** — the first real slice.
 3. Track C questions as they start blocking Track B. `scripts/multivoice_demo.py`
    answers 10-a by ear: play the alternating and overlapping halves and note

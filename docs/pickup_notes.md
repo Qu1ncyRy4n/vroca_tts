@@ -19,6 +19,13 @@
 
 ---
 
+## Before The Next Deployment Update
+
+`measure.py` now imports `engines`, so `~/nix-dotfiles/home/tts.nix` must copy
+`engines.py` into `measureSrc` instead of `daemon.py` **before** the `vroca_tts`
+lock is updated. Otherwise `pitchTables` fails to build. See
+[`roadmap.md`](roadmap.md) A4 for the exact diff.
+
 ## Staged Rust Replacement Roadmap (`rust_impl/`)
 
 1. ~~Resolve the open decisions needed for the first slice.~~ **Done.**
