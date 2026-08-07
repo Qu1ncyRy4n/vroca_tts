@@ -1,0 +1,7 @@
+[package]
+name = "tts-panel"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+vroca-client = { path = "../../crates/vroca-client" }
