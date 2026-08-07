@@ -29,7 +29,7 @@ These are worth doing now because they are small, they improve daily use, and
 each one de-risks the equivalent Rust work by settling semantics against real
 usage first.
 
-### A1. Per-voice and master volume — small
+### A1. Per-voice and master volume — **done**
 
 mpv exposes a `volume` property, so this is a set_property call plus a
 preference plus a panel slider. Two levels are worth having:
@@ -45,7 +45,7 @@ per `VoiceId` fixes that once rather than every time.
 
 **Cost:** small. Bounded by the panel work, not the daemon work.
 
-### A2. Multiple voices in one queue — small, if voices share an engine
+### A2. Multiple voices in one queue — **done** (same engine)
 
 Confirmed by reading the code: `sid` is a **per-call** argument to
 `generate()`, not model state. Only one line binds it —
@@ -74,7 +74,7 @@ reasonable ceiling to design for.
 **Cost:** small for the same-engine case. Do not let it grow into cross-engine
 residency; that belongs in Rust.
 
-### A3. Engine-qualified voice names — small
+### A3. Engine-qualified voice names — **done**
 
 Voice names today resolve only within the loaded engine, so a client asking for
 `af_kore` while libritts is loaded gets `unknown voice`. This is exactly what
@@ -92,7 +92,7 @@ hit it.
 **Cost:** small. Note that switching engines forces a model reload, so the reply
 must not pretend it was instant.
 
-### A4. Stop `daemon.py` edits from rebuilding the pitch tables — small, needs deployment approval
+### A4. Stop `daemon.py` edits from rebuilding the pitch tables — **done in repo**, needs a deployment change
 
 `~/nix-dotfiles/home/tts.nix` builds `measureSrc` from `measure.py`,
 `daemon.py`, and `voices.py`, because `measure.py` imports `daemon` for
@@ -179,9 +179,11 @@ endpoint is the practical path on this hardware.
 
 ## Suggested Order
 
-1. **A1 volume** and **A2 same-engine multi-voice** — small, immediately useful,
-   and they settle semantics that Rust will need anyway.
-2. **A3 engine-qualified names** — removes a live client surprise.
-3. **Rust stage 3** — the first real slice.
-4. **A4 pitch tables** — whenever a deployment change is being made anyway.
-5. Track C questions as they start blocking Track B.
+1. ~~A1 volume, A2 same-engine multi-voice, A3 engine-qualified names,
+   A4 engine extraction~~ — **all implemented.** A4 needs one line changed in
+   `~/nix-dotfiles/home/tts.nix` to take effect: `measureSrc` should copy
+   `engines.py` instead of `daemon.py`.
+2. **Rust stage 3** — the first real slice.
+3. Track C questions as they start blocking Track B. `scripts/multivoice_demo.py`
+   answers 10-a by ear: play the alternating and overlapping halves and note
+   which one you can actually follow.

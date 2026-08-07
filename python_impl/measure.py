@@ -14,7 +14,7 @@ import sys
 import numpy as np
 
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
-import daemon  # noqa: E402
+import engines  # noqa: E402
 
 PROBE = "The quick brown fox jumps over the lazy dog."
 
@@ -41,7 +41,7 @@ def median_f0(samples, rate, lo=70, hi=350):
 
 def main():
     engine, model_dir, out = sys.argv[1], sys.argv[2], sys.argv[3]
-    eng = daemon.build_engine(engine, {engine: model_dir}, 4)
+    eng = engines.build_engine(engine, {engine: model_dir}, 4)
     table = {}
     for sid in range(eng.num_speakers):
         try:

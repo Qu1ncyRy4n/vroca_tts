@@ -143,6 +143,28 @@ class Panel(Gtk.Application):
         srow.append(self.speed)
         root.append(srow)
 
+        vrow = Gtk.Box(spacing=10)
+        vrow.append(Gtk.Label(label="Volume"))
+        self.volume = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 0, 100, 1)
+        self.volume.set_hexpand(True)
+        self.volume.set_draw_value(True)
+        self.volume.set_value(100)
+        self.volume.connect("value-changed",
+                            lambda w: self._send_if_user(f"volume {int(w.get_value())}"))
+        vrow.append(self.volume)
+        root.append(vrow)
+
+        trow = Gtk.Box(spacing=10)
+        trow.append(Gtk.Label(label="Voice Trim"))
+        self.trim = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, -50, 50, 1)
+        self.trim.set_hexpand(True)
+        self.trim.set_draw_value(True)
+        self.trim.set_value(0)
+        self.trim.connect("value-changed",
+                          lambda w: self._send_if_user(f"trim {int(w.get_value())}"))
+        trow.append(self.trim)
+        root.append(trow)
+
         erow = Gtk.Box(spacing=10)
         erow.append(Gtk.Label(label="Engine"))
         self.engine = Gtk.DropDown.new_from_strings(["kokoro"])
@@ -263,6 +285,14 @@ class Panel(Gtk.Application):
         GLib.timeout_add(400, self._refresh)
         win.present()
 
+    def _send_if_user(self, cmd):
+        """Only forward slider moves the user made. _refresh writes these
+        scales to match daemon state, and without this guard each refresh would
+        echo the value straight back and fight anything set elsewhere."""
+        if getattr(self, "_syncing", True):
+            return
+        send(cmd)
+
     def _set_mode(self, *_):
         if self._syncing:
             return
@@ -356,11 +386,20 @@ class Panel(Gtk.Application):
             head += f"\nmodel {model}\n\n{st['sentence']}"
         else:
             head = f"idle{qstr}\nmodel {model}"
+        ev = st.get("effective_volume")
+        if ev is not None and ev != 100:
+            head += f"\nvolume {ev}"
         self.stat.set_text(head)
 
         self._syncing = True
         if abs(self.speed.get_value() - st["speed"]) > 0.01:
             self.speed.set_value(st["speed"])
+
+        if st.get("volume") is not None and abs(self.volume.get_value() - st["volume"]) > 0.5:
+            self.volume.set_value(st["volume"])
+
+        if st.get("trim") is not None and abs(self.trim.get_value() - st["trim"]) > 0.5:
+            self.trim.set_value(st["trim"])
 
         if st.get("font_size") and abs(self.font_size.get_value() - st["font_size"]) > 0.5:
             self.font_size.set_value(st["font_size"])

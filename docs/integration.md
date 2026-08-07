@@ -109,6 +109,48 @@ A catalogue entry looks like:
 {"sid": 5, "name": "Kore", "id": "af_kore", "lang": "en-US", "gender": "female"}
 ```
 
+### Multiple voices in one queue
+
+Each queued item can carry its own voice. This is how you give different
+speakers different voices:
+
+```sh
+tts queue --voice sid3 The architect has finished reviewing.
+tts queue --voice sid4 Acknowledged. Starting implementation.
+tts say   --voice sid3 Stop. That breaks the protocol.
+```
+
+**Do not select a voice and then queue.** It looks equivalent and is not:
+
+```sh
+tts voice sid3 && tts queue "..."     # WRONG
+tts voice sid4 && tts queue "..."     # both items speak in sid4
+```
+
+Queued items are rendered when they reach the front, not when they are
+submitted, so every item would use whichever voice happened to be current at
+render time. The voice has to travel with the item, which is what `--voice`
+does.
+
+The `--voice` token must be a single word, so catalogue ids work but display
+names containing spaces do not. All items share the loaded engine — per-item
+voices across *different* engines need two resident models and are not
+supported. `status` reports `item_voice` and `queue_voices` so you can verify
+what was actually recorded.
+
+### Level
+
+| Command | Argument | Effect |
+|:---|:---|:---|
+| `volume <int>` | `0`–`100` | Master level. |
+| `trim <int>` | `-100`–`100` | Offset for the *current* voice, remembered per voice. |
+
+Voices differ materially in loudness, so switching voice changes perceived
+volume. A trim is stored against `engine:sid` and applied whenever that voice
+plays, so you set it once. `status` reports `volume`, `trim`, and
+`effective_volume`. Gain is applied in the player, so changing a trim never
+forces a re-render.
+
 **Prefer ids over indexes.** An index only means something relative to the
 currently loaded engine, and it can shift if a model is updated. Ids are stable.
 
@@ -121,10 +163,17 @@ tts engine kokoro
 tts voice af_kore
 ```
 
-Read `engine` from `status` before selecting a voice by name, or select the
-engine explicitly. **Changing:** an engine-qualified form, `kokoro:af_kore`,
-which switches automatically. See `rust-spec.md` Decision 10 and
-[`roadmap.md`](roadmap.md) A3.
+Or use the **engine-qualified form**, which switches for you:
+
+```sh
+tts voice kokoro:af_kore     # -> "voice 5 (engine kokoro)"
+tts voice libritts:sid3      # -> "voice 3 (engine libritts)"
+```
+
+The reply names the engine when a switch happened, because switching reloads a
+model and is not instant. An unrecognized prefix is treated as part of the
+name rather than a failed switch, so `voice nosuch:x` reports
+`unknown voice: nosuch:x`.
 
 ### Engine and playback
 
@@ -136,6 +185,8 @@ which switches automatically. See `rust-spec.md` Decision 10 and
 | `aligner <name>` | `asr`, `energy` | Word-timing method. |
 | `status` | — | Full state as JSON. |
 | `unload` / `reload` | — | Drop or rebuild the engine. |
+| `volume <int>` | `0`–`100` | Master output level. |
+| `trim <int>` | `-100`–`100` | Per-voice level offset. |
 
 `engine` availability is not fixed: `zipvoice` appears only when reference clips
 exist, and `remote` only when the API environment is configured. Read the

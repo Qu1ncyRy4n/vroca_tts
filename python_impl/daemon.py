@@ -21,17 +21,22 @@ import tempfile
 import threading
 import time
 
+from engines import (
+    CLONE_DIR, CONFIG_DIR, DEFAULT_ENGINE, ENGINES, RemoteEngine,
+    build_engine, list_clone_refs,
+)
+
 RUNTIME = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
 SOCK = os.path.join(RUNTIME, "tts.sock")
 MPV_SOCK = os.path.join(RUNTIME, "tts-mpv.sock")
 STATE = os.path.join(RUNTIME, "tts-state.json")
 MODE_FILE = os.path.join(RUNTIME, "tts-mode")
-CONFIG_DIR = os.path.join(
-    os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "tts")
 PREFS = os.path.join(CONFIG_DIR, "prefs.json")
-CLONE_DIR = os.path.join(CONFIG_DIR, "voices")
 
 SPEED_MIN, SPEED_MAX, SPEED_STEP = 0.5, 3.0, 0.15
+VOLUME_MIN, VOLUME_MAX = 0, 100
+DEFAULT_VOLUME = 100
+TRIM_MIN, TRIM_MAX = -100, 100
 PREFETCH = 5
 MODES = ["subtitle", "rsvp", "scroll_rsvp", "off"]
 ALIGNERS = ["asr", "energy"]
@@ -153,214 +158,6 @@ class Mpv:
                         pass
 
 
-def _supertonic_cfg(s, d, threads):
-    return s.OfflineTtsModelConfig(
-        supertonic=s.OfflineTtsSupertonicModelConfig(
-            duration_predictor=f"{d}/duration_predictor.int8.onnx",
-            text_encoder=f"{d}/text_encoder.int8.onnx",
-            vector_estimator=f"{d}/vector_estimator.int8.onnx",
-            vocoder=f"{d}/vocoder.int8.onnx",
-            tts_json=f"{d}/tts.json",
-            unicode_indexer=f"{d}/unicode_indexer.bin",
-            voice_style=f"{d}/voice.bin",
-        ),
-        num_threads=threads,
-    )
-
-
-def _kokoro_cfg(s, d, threads):
-    return s.OfflineTtsModelConfig(
-        kokoro=s.OfflineTtsKokoroModelConfig(
-            model=f"{d}/model.int8.onnx",
-            voices=f"{d}/voices.bin",
-            tokens=f"{d}/tokens.txt",
-            data_dir=f"{d}/espeak-ng-data",
-            lexicon=f"{d}/lexicon-us-en.txt,{d}/lexicon-zh.txt",
-        ),
-        num_threads=threads,
-    )
-
-
-def _libritts_cfg(s, d, threads):
-    return s.OfflineTtsModelConfig(
-        vits=s.OfflineTtsVitsModelConfig(
-            model=f"{d}/en_US-libritts_r-medium.onnx",
-            tokens=f"{d}/tokens.txt",
-            data_dir=f"{d}/espeak-ng-data",
-        ),
-        num_threads=threads,
-    )
-
-
-ENGINES = {
-    "kokoro": (_kokoro_cfg, True),
-    "supertonic": (_supertonic_cfg, False),
-    "libritts": (_libritts_cfg, False),
-}
-DEFAULT_ENGINE = "kokoro"
-
-
-class LocalEngine:
-    kind = "local"
-
-    def __init__(self, name, model_dir, threads):
-        import sherpa_onnx
-        builder, self.named = ENGINES[name]
-        self.name = name
-        self.tts = sherpa_onnx.OfflineTts(
-            sherpa_onnx.OfflineTtsConfig(model=builder(sherpa_onnx, model_dir, threads)))
-
-    @property
-    def num_speakers(self):
-        return self.tts.num_speakers or 1
-
-    def generate(self, text, sid=0, speed=1.0):
-        a = self.tts.generate(text, sid=sid, speed=speed)
-        return a.samples, a.sample_rate
-
-
-class CloneEngine:
-    kind = "clone"
-    named = True
-
-    def __init__(self, model_dir, vocoder, threads, recognizer=None):
-        import sherpa_onnx
-        d = model_dir
-        self.tts = sherpa_onnx.OfflineTts(sherpa_onnx.OfflineTtsConfig(
-            model=sherpa_onnx.OfflineTtsModelConfig(
-                zipvoice=sherpa_onnx.OfflineTtsZipvoiceModelConfig(
-                    encoder=f"{d}/encoder.int8.onnx",
-                    decoder=f"{d}/decoder.int8.onnx",
-                    vocoder=vocoder,
-                    tokens=f"{d}/tokens.txt",
-                    lexicon=f"{d}/lexicon.txt",
-                    data_dir=f"{d}/espeak-ng-data",
-                ),
-                num_threads=threads,
-            )))
-        self.recognizer = recognizer
-        self.name = "zipvoice"
-        self.refs = list_clone_refs()
-
-    @property
-    def num_speakers(self):
-        return max(1, len(self.refs))
-
-    def _load_ref(self, path):
-        import wave
-        import numpy as np
-        with wave.open(path, "rb") as w:
-            rate = w.getframerate()
-            x = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16)
-        return (x.astype(np.float32) / 32768.0).tolist(), rate
-
-    def _transcript(self, path, samples, rate):
-        txt = os.path.splitext(path)[0] + ".txt"
-        try:
-            with open(txt) as f:
-                s = f.read().strip()
-            if s:
-                return s
-        except OSError:
-            pass
-        if self.recognizer is None:
-            return ""
-        import numpy as np
-        st = self.recognizer.create_stream()
-        st.accept_waveform(rate, np.asarray(samples, dtype=np.float32))
-        self.recognizer.decode_stream(st)
-        s = st.result.text.strip()
-        try:
-            with open(txt, "w") as f:
-                f.write(s)
-        except OSError:
-            pass
-        return s
-
-    def generate(self, text, sid=0, speed=1.0):
-        if not self.refs:
-            raise RuntimeError(
-                f"no reference wavs in {CLONE_DIR} -- drop a 5-20s clip in there")
-        path = self.refs[min(sid, len(self.refs) - 1)]
-        samples, rate = self._load_ref(path)
-        prompt = self._transcript(path, samples, rate)
-        a = self.tts.generate(text, prompt, samples, rate, speed, 4)
-        return a.samples, a.sample_rate
-
-
-class RemoteEngine:
-    kind = "remote"
-    named = True
-
-    def __init__(self, base, model, key_file, voices):
-        self.base = base.rstrip("/")
-        self.model = model
-        self.key_file = key_file
-        self.voices = voices
-        self.name = "remote"
-
-    @staticmethod
-    def available():
-        kf = os.environ.get("TTS_API_KEY_FILE", "")
-        return bool(kf and os.path.exists(kf) and os.environ.get("TTS_API_BASE"))
-
-    def _key(self):
-        with open(self.key_file) as f:
-            return f.read().strip()
-
-    @property
-    def num_speakers(self):
-        return len(self.voices) or 1
-
-    def generate(self, text, sid=0, speed=1.0):
-        import json as _json
-        import urllib.request
-        import wave as _wave
-        import io
-        body = _json.dumps({
-            "model": self.model,
-            "input": text,
-            "voice": self.voices[sid] if sid < len(self.voices) else "alloy",
-            "speed": speed,
-            "response_format": "wav",
-        }).encode()
-        req = urllib.request.Request(
-            f"{self.base}/audio/speech", data=body,
-            headers={"Authorization": f"Bearer {self._key()}",
-                     "Content-Type": "application/json"})
-        with urllib.request.urlopen(req, timeout=60) as r:
-            raw = r.read()
-        with _wave.open(io.BytesIO(raw), "rb") as w:
-            rate = w.getframerate()
-            import array
-            pcm = array.array("h")
-            pcm.frombytes(w.readframes(w.getnframes()))
-        return [v / 32768.0 for v in pcm], rate
-
-
-def list_clone_refs():
-    try:
-        return sorted(os.path.join(CLONE_DIR, f) for f in os.listdir(CLONE_DIR)
-                      if f.lower().endswith(".wav"))
-    except OSError:
-        return []
-
-
-def build_engine(name, model_dirs, threads, recognizer=None):
-    if name == "zipvoice":
-        return CloneEngine(model_dirs["zipvoice"], model_dirs["vocoder"],
-                           threads, recognizer)
-    if name == "remote":
-        return RemoteEngine(
-            os.environ["TTS_API_BASE"],
-            os.environ.get("TTS_API_MODEL", "tts-1"),
-            os.environ["TTS_API_KEY_FILE"],
-            [v.strip() for v in os.environ.get(
-                "TTS_API_VOICES", "alloy,echo,fable,onyx,nova,shimmer").split(",")],
-        )
-    return LocalEngine(name, model_dirs[name], threads)
-
-
 class Reader:
     def __init__(self, tts, model_dirs, threads, engine=DEFAULT_ENGINE):
         self.tts = tts
@@ -374,6 +171,16 @@ class Reader:
         self.idx = 0
         self.speed = 1.0
         self.sid = 0
+        # A1: master level plus a per-voice trim. Voices differ materially in
+        # loudness, so switching voice changes perceived volume unless each one
+        # carries an offset. Keyed "engine:sid" so a trim follows the voice
+        # rather than the slot.
+        self.volume = DEFAULT_VOLUME
+        self.trims = {}
+        # A2: the voice an item was submitted with. None means "whatever the
+        # global voice is". sid is a per-call argument to generate(), so this
+        # costs no reload and no extra model.
+        self.item_sid = None
         self.font_size = DEFAULT_FONT_SIZE
         self.words_visible = DEFAULT_WORDS_VISIBLE
         self.position = DEFAULT_POSITION
@@ -466,6 +273,9 @@ class Reader:
             self.font_size = DEFAULT_FONT_SIZE
             self.words_visible = DEFAULT_WORDS_VISIBLE
             self.position = DEFAULT_POSITION
+            self.volume = DEFAULT_VOLUME
+            self.trims.clear()
+            self._apply_volume()
             save_prefs(self)
             try:
                 with open(MODE_FILE, "w") as f:
@@ -545,6 +355,29 @@ class Reader:
                 return entry["sid"]
         return None
 
+    def select_voice(self, token):
+        """Resolve `token`, switching engine first for a qualified name.
+
+        A voice name only means something inside its own engine, so asking for
+        `af_kore` while libritts is loaded fails even though the name is valid.
+        `kokoro:af_kore` says which engine it belongs to. Switching reloads the
+        model, so this is not free and the caller is told when it happened.
+        """
+        engine, _, rest = token.partition(":")
+        switched = False
+        if rest and engine in self.engines():
+            if engine != self.engine:
+                reply = self.set_engine(engine)
+                if not reply.startswith("engine "):
+                    return reply
+                switched = True
+            token = rest
+        sid = self.resolve_voice(token)
+        if sid is None:
+            return f"unknown voice: {token}"
+        reply = self.set_voice(sid)
+        return f"{reply} (engine {self.engine})" if switched else reply
+
     def set_voice(self, sid):
         if not (isinstance(sid, int) and 0 <= sid < self.voices()):
             return f"voice index out of range: {sid} (0..{self.voices() - 1})"
@@ -571,6 +404,45 @@ class Reader:
         except Exception:
             return 1
 
+    def voice_key(self, sid=None):
+        """Stable key for a trim: the voice, not the slot it happens to occupy."""
+        return f"{self.engine}:{self.sid if sid is None else sid}"
+
+    def effective_volume(self, sid=None):
+        trim = self.trims.get(self.voice_key(sid), 0)
+        return max(VOLUME_MIN, min(VOLUME_MAX, self.volume + trim))
+
+    def _apply_volume(self, sid=None):
+        self.mpv.cmd("set_property", "volume", self.effective_volume(sid))
+
+    def set_volume(self, level):
+        if level is None:
+            return f"volume needs a number between {VOLUME_MIN} and {VOLUME_MAX}"
+        with self.lock:
+            self.volume = max(VOLUME_MIN, min(VOLUME_MAX, int(level)))
+            self._apply_volume(self.item_sid)
+            save_prefs(self)
+            self._dump()
+            return f"volume {self.volume}"
+
+    def set_trim(self, amount, sid=None):
+        """Per-voice level offset. Applied in the player, never baked into the
+        cached audio -- otherwise changing a trim would force a re-render and
+        could clip."""
+        if amount is None:
+            return f"trim needs a number between {TRIM_MIN} and {TRIM_MAX}"
+        with self.lock:
+            key = self.voice_key(sid)
+            amount = max(TRIM_MIN, min(TRIM_MAX, int(amount)))
+            if amount:
+                self.trims[key] = amount
+            else:
+                self.trims.pop(key, None)
+            self._apply_volume(self.item_sid)
+            save_prefs(self)
+            self._dump()
+            return f"trim {key} {amount:+d} (effective {self.effective_volume(sid)})"
+
     def set_speed(self, speed):
         if speed is None:
             return f"speed needs a number between {SPEED_MIN} and {SPEED_MAX}"
@@ -594,7 +466,8 @@ class Reader:
         self._dump()
         t0 = time.monotonic()
         try:
-            samples, rate = self.tts.generate(self.sents[i], sid=self.sid, speed=1.0)
+            voice = self.sid if self.item_sid is None else self.item_sid
+            samples, rate = self.tts.generate(self.sents[i], sid=voice, speed=1.0)
             write_wav(out, samples, rate)
             self.spans[i] = self._align(samples, rate, self.sents[i].split())
         except Exception:
@@ -644,12 +517,15 @@ class Reader:
                 self._play()
                 return
             if self.queue:
-                self.sents = self.queue.pop(0)
+                self.sents, self.item_sid = self.queue.pop(0)
                 self.idx = 0
                 self.cache.clear()
+                self.spans.clear()
                 self._play()
                 return
             self.sents, self.idx = [], 0
+            self.item_sid = None
+            self.word = -1
             self.cache.clear()
             self._dump()
 
@@ -660,6 +536,7 @@ class Reader:
             return
         self.mpv.cmd("loadfile", w, "replace")
         self.mpv.cmd("set_property", "speed", self.speed)
+        self._apply_volume(self.item_sid)
         self.mpv.cmd("set_property", "pause", False)
         self.paused = False
         self.wake.set()
@@ -687,6 +564,11 @@ class Reader:
             "font_size": self.font_size,
             "words_visible": self.words_visible,
             "position": self.position,
+            "volume": self.volume,
+            "trim": self.trims.get(self.voice_key(self.item_sid), 0),
+            "effective_volume": self.effective_volume(self.item_sid),
+            "item_voice": self.item_sid,
+            "queue_voices": [q[1] for q in self.queue],
             "voices": (self.tts.num_speakers or 1) if self.tts else None,
             "last_render_ms": self.render_ms.get(self.idx),
             "avg_render_ms": int(sum(ms) / len(ms)) if ms else None,
@@ -699,11 +581,13 @@ class Reader:
                 json.dump(self.status(), f)
             os.replace(tmp, STATE)
 
-    def read(self, text):
+    def read(self, text, sid=None):
         with self.lock:
             self.sents = sentences(text)
             self.idx = 0
+            self.item_sid = sid
             self.cache.clear()
+            self.spans.clear()
             if not self.sents:
                 return "empty"
             self._play()
@@ -713,6 +597,7 @@ class Reader:
         with self.lock:
             self.mpv.cmd("stop")
             self.sents, self.idx, self.paused, self.word = [], 0, False, -1
+            self.item_sid = None
             self.cache.clear()
             self.spans.clear()
             self._dump()
@@ -772,7 +657,7 @@ class Reader:
         with self.lock:
             return bool(self.sents)
 
-    def enqueue(self, text):
+    def enqueue(self, text, sid=None):
         s = sentences(text)
         if not s:
             return "empty text"
@@ -780,11 +665,18 @@ class Reader:
             if not self.sents or self.paused:
                 self.sents = s
                 self.idx = 0
+                self.item_sid = sid
                 self.cache.clear()
+                self.spans.clear()
                 self._play()
                 return f"playing {len(s)} sentences"
             else:
-                self.queue.append(s)
+                # The voice travels WITH the item. Selecting a voice and then
+                # queueing does not work: rendering happens later, so every
+                # queued item would use whichever voice is current when it is
+                # finally rendered, not the one that was selected when it was
+                # submitted.
+                self.queue.append((s, sid))
                 self._dump()
                 return f"queued {len(s)} sentences (queue length: {len(self.queue)})"
 
@@ -816,6 +708,21 @@ def _num(cmd, cast):
         return cast(parts[1])
     except ValueError:
         return None
+
+
+def _split_voice(text):
+    """Pull a leading `--voice TOKEN` off `text`.
+
+    Returns (voice_token_or_None, remaining_text). The token is a single word,
+    so catalogue ids work but display names containing spaces do not -- there is
+    no unambiguous way to tell where the name stops and the speech starts.
+    """
+    if not text.startswith("--voice "):
+        return None, text
+    parts = text[len("--voice "):].lstrip().split(None, 1)
+    if not parts:
+        return None, ""
+    return parts[0], (parts[1] if len(parts) > 1 else "")
 
 
 def selection():
@@ -980,6 +887,8 @@ def save_prefs(reader):
                 "font_size": reader.font_size,
                 "words_visible": reader.words_visible,
                 "position": reader.position,
+                "volume": reader.volume,
+                "trims": reader.trims,
             }, f)
         os.replace(tmp, PREFS)
     except OSError:
@@ -1015,6 +924,10 @@ def main():
     reader.font_size = prefs.get("font_size", DEFAULT_FONT_SIZE)
     reader.words_visible = prefs.get("words_visible", DEFAULT_WORDS_VISIBLE)
     reader.position = prefs.get("position", DEFAULT_POSITION)
+    reader.volume = prefs.get("volume", DEFAULT_VOLUME)
+    trims = prefs.get("trims")
+    if isinstance(trims, dict):
+        reader.trims = {k: v for k, v in trims.items() if isinstance(v, int)}
     sid = prefs.get("voice")
     if isinstance(sid, int) and 0 <= sid < reader.voices():
         reader.sid = sid
@@ -1070,16 +983,23 @@ def main():
                 reader.mpv.cmd("quit")
                 os._exit(0)
             elif cmd.startswith("say ") or cmd.startswith("speak "):
-                reply = reader.read(cmd.split(" ", 1)[1])
+                token, body = _split_voice(cmd.split(" ", 1)[1])
+                sid = reader.resolve_voice(token) if token else None
+                reply = (f"unknown voice: {token}" if token and sid is None
+                         else reader.read(body, sid))
             elif cmd.startswith("queue "):
-                reply = reader.enqueue(cmd.split(" ", 1)[1])
+                token, body = _split_voice(cmd.split(" ", 1)[1])
+                sid = reader.resolve_voice(token) if token else None
+                reply = (f"unknown voice: {token}" if token and sid is None
+                         else reader.enqueue(body, sid))
             elif cmd.startswith("speed "):
                 reply = reader.set_speed(_num(cmd, float))
             elif cmd.startswith("voice "):
-                token = cmd.split(None, 1)[1]
-                sid = reader.resolve_voice(token)
-                reply = (f"unknown voice: {token}" if sid is None
-                         else reader.set_voice(sid))
+                reply = reader.select_voice(cmd.split(None, 1)[1])
+            elif cmd.startswith("volume "):
+                reply = reader.set_volume(_num(cmd, int))
+            elif cmd.startswith("trim "):
+                reply = reader.set_trim(_num(cmd, int))
             elif cmd.startswith("engine "):
                 reply = reader.set_engine(cmd.split()[1])
             elif cmd.startswith("aligner "):
