@@ -1602,7 +1602,9 @@ are revisited deliberately rather than discovered to be wrong later.
 | R1 | Multiple voices usable at the same time, so different local agents speak in different voices — for example an architect agent and an implementation agent. | User, this session |
 | R2 | Preload and unload models through the API and CLI. | User, this session |
 | R3 | Voices sourced from a local directory, so a repository can carry the voices its agents use. | User, this session |
-| R4 | Lower playback latency than waiting for a whole sentence to render. | User, this session |
+| R4 | Lower playback latency than waiting for a whole sentence to render, without making speech sound emotionally disjoint or rhythmically strange. | User, this session |
+| R5 | Interruption is explicit and restricted, rather than an accident of arrival order. | User, this session |
+| R6 | Game-style voices: portable, designed, distinct, and identical across sessions and players. | User, this session |
 
 ### 10.2 Measured Evidence
 
@@ -1643,10 +1645,33 @@ by total sentence length.
 
 ### 10.3 Consequence For R4 — Latency
 
-**Recommendation.** Chunk synthesis below the sentence. Make the first chunk
-deliberately small, then grow subsequent chunks to preserve prosody. Keep writing
-chunks to tmpfs and keep mpv; a pipe or an in-process ring buffer optimizes
-something already measured to be a memcpy.
+**The governing constraint: full input, incremental output.** An engine must see
+the *whole* text before committing to prosody, even if it emits audio
+progressively. Otherwise each chunk receives its own utterance-level intonation
+and the result is emotionally disjoint and rhythmically wrong — a sentence read
+as a series of unrelated fragments.
+
+This splits the engines into two regimes, and the distinction is fundamental:
+
+| Regime | Context | Latency | Prosody |
+| --- | --- | --- | --- |
+| **Streaming** — engine consumes full text, emits audio incrementally | Whole input | Low | Correct |
+| **Chunked** — text is cut up and each piece synthesized independently | Per chunk only | Low | **Degraded at every seam** |
+
+kokoro, libritts, and supertonic are non-streaming (§10.2), so chunking them is
+the *only* latency lever available — and it buys latency by spending prosody.
+That is a real cost, not a rounding error, and it is why chunking is a workaround
+rather than the destination.
+
+**Recommendation.** Prefer a genuinely streaming engine where one exists
+(§10.10). For the current non-streaming engines, chunk on clause boundaries, make
+the first chunk deliberately small, then grow subsequent chunks so only the
+opening pays a seam. Keep writing chunks to tmpfs and keep mpv; a pipe or an
+in-process ring buffer optimizes something already measured to be a memcpy.
+
+Chunking MUST be a per-engine policy, not a global one. libritts at RTF 0.03
+renders a whole sentence in 139 ms and MUST NOT be chunked at all — it would pay
+the prosody cost for no latency benefit.
 
 Do **not** pursue the engine streaming callback as a latency fix for these
 models. It was measured and it yields one chunk.
@@ -1659,9 +1684,17 @@ Costs that MUST be accepted or designed around:
   position per file.
 - Gapless playback across chunks becomes a player requirement.
 
-A useful side effect: chunking improves cancellation granularity. Because the
+Two useful side effects. Chunking improves cancellation granularity: because the
 engines cannot abort mid-synthesis, the generation counter of Decision 4 wastes
-at most one chunk instead of one whole sentence.
+at most one chunk instead of one whole sentence. It also gives a finer skip
+resolution, so `Skip` gains a third unit:
+
+```text
+Skip { unit: Unit::{Chunk, Sentence, Item} }
+```
+
+Chunk-level skip is only meaningful for engines actually being chunked, so the
+available units depend on engine capability (§10.8, 10-e).
 
 ### 10.4 Consequence For R1 — Multiple Voices
 
@@ -1688,11 +1721,39 @@ Speak { channel, text, replace: Replace::{None, Active, Channel, All} }
 Stop  { channel, scope:  Scope::{Playback, Queue, All} }
 ```
 
+**Proposed: explicit urgency, with interruption restricted by default.** A
+channel alone does not say what happens when two channels want the speaker at
+once. An explicit parameter makes that a caller's declared intent rather than an
+emergent property of arrival order:
+
+```text
+Speak { channel, text, urgency: Urgency::{Background, Normal, Urgent} }
+```
+
+| Urgency | Behavior when something else is speaking |
+| --- | --- |
+| `Background` | Queue behind everything. Never interrupts. |
+| `Normal` | Queue behind the current item; may preempt `Background`. |
+| `Urgent` | Interrupt immediately. The displaced item is retained and resumed. |
+
+Interruption MUST be restricted by default. `Normal` is the default, so an agent
+has to *ask* to interrupt. Without that, a chatty agent silently talks over
+whatever the user is actually reading, and the failure is invisible because the
+displaced speech simply never arrives.
+
+`Urgent` MUST interrupt rather than mix. Two simultaneous voices are less
+intelligible than one, so preemption is the useful behavior and overlap is not
+(§10.8, 10-a). Displaced speech resumes, reusing the mechanism Decision 14
+already requires for preview.
+
+An explicit rate or depth limit on `Urgent` is worth considering, so a
+misbehaving agent cannot preempt in a loop. **Open.**
+
 Open consequences:
 
 - Do the `read` and `toggle` hotkeys of Decision 13 act on a user channel, the
   active channel, or globally? Stopping should probably be global; pausing is
-  less obvious.
+  less obvious. The user's own channel arguably outranks every agent channel.
 - What is the scheduling policy between channels — priority, round-robin, or
   strict arrival order?
 - Preview (Decision 14) becomes cleaner as an ephemeral high-priority channel,
@@ -1761,6 +1822,87 @@ A cloned repository is untrusted input. The current design's guarantee — every
 model is a hash-verified store path — is worth more than the convenience of
 dropping an `.onnx` file into a project.
 
+### 10.6a The Game Case: Portable, Designed, Session-Stable Voices
+
+A second use case was raised: a game calls Vroca, supplies voices from its own
+files, and expects each character voice to be **portable, designed, distinct, and
+identical across sessions and across players**.
+
+Session-stability is the demanding part. A voice that drifts between runs, or
+differs between two players, is not a character — it is noise. That rules out any
+mechanism whose output is not reproducible.
+
+**Recommended pattern: design once, ship the artifact.**
+
+```text
+authoring time (once, by a human)
+    design or record the voice
+    -> render a reference clip
+    -> commit the .wav to the game's assets
+
+runtime (every session, every player)
+    clone from that committed clip
+    -> identical conditioning -> identical character voice
+```
+
+This makes the voice a **data artifact** rather than a prompt or a model. It is
+portable because it is a file, distinct because it was authored, static because
+bytes do not drift, and low-risk because it is audio parsed as audio. It also
+keeps §10.6's trust position intact: the game ships clips, never executable
+graphs.
+
+The alternative — shipping a per-game ONNX model — buys nothing here that a clip
+does not, while introducing a code-execution surface (§10.6).
+
+### 10.6b Qwen3-TTS Evaluation
+
+Researched because it was raised as the model family behind this use case. Facts,
+not assumptions:
+
+| Property | Finding |
+| --- | --- |
+| Variants | 1.7B: VoiceDesign, CustomVoice, Base. 0.6B: CustomVoice, Base |
+| Licence | Apache-2.0 |
+| Streaming | Yes. End-to-end latency as low as **97 ms**; can emit audio after a single character of input |
+| Voice design | Natural-language `instruct` description, no reference audio required |
+| Voice cloning | Reference clip plus its transcript; ~3 seconds is sufficient |
+| Runtime | PyTorch primary; vLLM supported |
+| ONNX / sherpa-onnx | **No export or support documented** |
+| Determinism of a designed voice | **Not documented.** No stated speaker embedding, seed, or reproducibility guarantee |
+
+Three consequences matter.
+
+**1. It solves R4 properly, where chunking only works around it.** 97 ms
+streaming versus kokoro's 4630 ms whole-sentence render is not an incremental
+difference, and because it streams from full input it does not pay the prosody
+cost of §10.3.
+
+**2. It does not fit inside the current daemon.** The existing stack is
+deliberately `sherpa-onnx` — C++ and onnxruntime, int8, CPU, and explicitly no
+Python ML stack, as `~/nix-dotfiles/home/tts.nix` records. Qwen3-TTS is a ~2B
+parameter transformer wanting PyTorch or vLLM and GPU. Embedding it would
+replace the stack's central premise.
+
+The resolution is that it MUST NOT be embedded. It belongs **out of process**,
+behind the provider boundary the specification already reserves.
+
+**3. The "remote" engine is misnamed, and that is useful.** The existing adapter
+speaks OpenAI-compatible `/v1/audio/speech` over HTTP. vLLM serves exactly that
+interface, on localhost, over a GPU. So a locally hosted Qwen3-TTS reaches Vroca
+through the *existing* adapter with no new engine type, no PyTorch in the daemon,
+and no change to the operation set.
+
+`RemoteEngine` SHOULD therefore be understood as an **HTTP engine** whose
+endpoint may be local or remote. Privacy follows the endpoint, not the name:
+a localhost endpoint sends nothing off the machine, and that distinction MUST be
+visible to the user rather than inferred from a label.
+
+**4. Do not depend on VoiceDesign for session-stable character voices.**
+Reproducibility across sessions is undocumented, and §10.6a requires exactly
+that. Use VoiceDesign at *authoring* time to produce a clip; clone from the clip
+at runtime. This uses the feature for what it demonstrably does — generating a
+voice — without betting a game's characters on an unverified guarantee.
+
 ### 10.7 Does This Require An In-App Player?
 
 **Not for the stated requirements.** Decision 9 already places the player behind
@@ -1791,6 +1933,10 @@ feature on the hotkey surface, in exchange for capabilities not yet needed.
 | 10-g | Model residency policy: explicit-only, or eviction under memory pressure? | R2 |
 | 10-h | Is per-repository model loading ever permitted, and under what trust rule? | R3, §2.3 |
 | 10-i | Does a channel bind one voice, or may it switch voices mid-queue? | DEC-1, DEC-10 |
+| 10-j | Should `Urgent` be rate- or depth-limited so an agent cannot preempt in a loop? | §10.4 |
+| 10-k | Is chunking enabled per engine by capability, and what is the boundary rule — clauses, punctuation, or token count? | §10.3 |
+| 10-l | Is an out-of-process GPU engine (Qwen3-TTS via local vLLM) in scope, and who owns its lifecycle — Vroca, systemd, or the user? | §10.6b |
+| 10-m | Should the HTTP engine surface endpoint locality to the user, so a localhost GPU is visibly different from a third-party API? | §10.6b, privacy |
 
 ### 10.9 Effect On The First Slice
 
