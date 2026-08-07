@@ -12,6 +12,8 @@ Vroca is a text-to-speech and assistive reading framework. The current implement
 
 `docs/legacy-compatibility.md` is the parity checklist and states the fixtures each legacy command needs before it may be called compatible.
 
+`docs/integration.md` is the guide for programs that call Vroca rather than implement it. Point external callers there. Keep it accurate when the socket surface, error strings, or limits change.
+
 `docs/pickup_notes.md` is a working handoff and roadmap. `README.md` is a short orientation.
 
 ## Deployment Boundary

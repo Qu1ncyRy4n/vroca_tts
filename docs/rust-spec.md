@@ -315,6 +315,7 @@ left Open in section 7.
 | N16 | `_dump()` is called from `_on_pos`, i.e. on every mpv position tick. Each dump calls `engines()`, which does `os.listdir(CLONE_DIR)` and `os.path.exists(key_file)`, then serializes 20 fields and rewrites the state file. A filesystem scan and a file rewrite many times per second. | `daemon.py:591-605,653,664-669,511-517` |
 | N17 | `render_ms` is never cleared, so `avg_render_ms` mixes engines and documents for the daemon's entire lifetime. | `daemon.py:383,573,661` |
 | N18 | The panel gates its catalogue fetch on `st.get("voices")` being truthy, which is `None` when the model is unloaded. After `unload`, the voice list never populates. | `panel.py:388`; `daemon.py:659` |
+| N27 | `_recognizer()` calls `sherpa_onnx.OfflineRecognizer.create_from_transducer`, which no longer exists — the API is now `from_transducer`. `_align` catches the `AttributeError` and silently falls back to the energy aligner, while `status` keeps reporting `"aligner": "asr"`. The advertised aligner has been inoperative and nothing said so. The same failure disables zipvoice's automatic reference transcription. | `daemon.py:407`; confirmed live |
 | D12 | Several failures are swallowed. Callers cannot distinguish invalid input, engine failure, playback failure, and success from a stable error shape. | `daemon.py:119-124,393-401,564-572` |
 
 ### 5.5 Range And Documentation Drift
@@ -1605,6 +1606,7 @@ are revisited deliberately rather than discovered to be wrong later.
 | R4 | Lower playback latency than waiting for a whole sentence to render, without making speech sound emotionally disjoint or rhythmically strange. | User, this session |
 | R5 | Interruption is explicit and restricted, rather than an accident of arrival order. | User, this session |
 | R6 | Game-style voices: portable, designed, distinct, and identical across sessions and players. | User, this session |
+| R7 | Callers may take the synthesized audio themselves instead of Vroca playing it, so a game can route speech through its own audio engine. | User, this session |
 
 ### 10.2 Measured Evidence
 
@@ -1631,6 +1633,29 @@ end**. There is no partial audio to play and no mid-synthesis abort.
 
 **The wav file is not the bottleneck.** `$XDG_RUNTIME_DIR` is tmpfs, so writing
 the wav is a memcpy into RAM, not disk I/O.
+
+**Nor is anything else outside the engine.** Full path measured for one sentence
+on libritts, plus the live daemon's own reported figure for kokoro:
+
+| Stage | Cost |
+| --- | ---: |
+| `tts` client spawn | ~5 ms |
+| primary-selection grab (`wl-paste`) | ~3 ms |
+| socket round trip | ~2 ms |
+| `write_wav` to tmpfs | ~23 ms |
+| energy alignment | ~2 ms |
+| ASR alignment, when it works (N27) | ~116 ms |
+| mpv `loadfile` to playing | ~33 ms |
+| **synthesis, libritts** | **~139 ms** |
+| **synthesis, kokoro** | **~3300 ms** (live `last_render_ms`) |
+
+Synthesis is 90–99% of perceived latency and everything else is rounding error.
+Engine choice is therefore the single largest latency control available, before
+any chunking work: kokoro is roughly 24× libritts on the same sentence.
+
+The `loadfile`-to-playing figure was measured with `--ao=null`. A real output
+device that has been idled by PipeWire may add wake-up latency on the first
+sentence that this measurement does not capture.
 
 **The governing relationship.** RTF is roughly constant across chunk sizes, so:
 
@@ -1747,7 +1772,29 @@ intelligible than one, so preemption is the useful behavior and overlap is not
 already requires for preview.
 
 An explicit rate or depth limit on `Urgent` is worth considering, so a
-misbehaving agent cannot preempt in a loop. **Open.**
+misbehaving agent cannot preempt in a loop. **Open** (§10.8, 10-j).
+
+**Proposed refinement: enum for behavior, float for ordering.** Pairing the class
+with a `0.0..=1.0` weight is workable, but only under a strict rule:
+
+```text
+Urgency { class: Background | Normal | Urgent, weight: f32 }   // 0.0 ..= 1.0
+```
+
+- The **class** decides behavior — whether this preempts. It is the only thing
+  that may cause an interruption.
+- The **weight** orders items *within* a class. It MUST NOT change the preemption
+  decision.
+
+That separation is the whole value. If a float could promote `Normal` into an
+interruption, callers face two interacting axes with no clear boundary, and the
+predictable result is priority inflation: every caller sends `0.9` and the
+ordering carries no information. Keeping interruption categorical and ordering
+continuous means a misbehaving client can reorder itself but can never seize the
+speaker.
+
+A bare float with no class would be worse still — there is no defensible
+threshold at which 0.71 interrupts and 0.69 does not.
 
 Open consequences:
 
@@ -1920,6 +1967,50 @@ audio only when overlap or ducking becomes a real requirement. Replacing mpv
 would forfeit pitch-corrected speed control, which is the single most-used
 feature on the hotkey surface, in exchange for capabilities not yet needed.
 
+### 10.7a Audio Sinks: Letting Callers Take The Audio
+
+A further requirement: mpv stays the default, but another program — a Godot game
+was the example — should be able to **receive the audio itself** rather than have
+Vroca play it.
+
+This is the right shape, and it is a different axis from §10.7. That section asked
+which player Vroca uses. This asks whether Vroca plays at all.
+
+A game must own its own audio. It needs to place the voice in 3D space, duck it
+under music, route it through its own bus, and pause it with the game rather than
+with the desktop. Vroca playing to the default output defeats every one of those.
+
+**Proposed: playback destination is a typed sink, chosen per request or per
+channel.**
+
+```text
+Sink::Player          mpv. the default. Vroca plays it.
+Sink::Caller { .. }   Vroca synthesizes and hands back PCM. it plays nothing.
+```
+
+`Sink::Caller` returns samples, sample rate, channel count, and the word-timing
+spans, so the caller can drive its own highlighting. Delivery mechanism is
+**Open** — the candidates are a length-prefixed stream on the structured socket,
+or a file descriptor passed over the Unix socket for a shared ring buffer, which
+avoids a copy but is harder to bind from a game engine.
+
+Consequences worth stating:
+
+- Playback control (`pause`, `speed`, `next`) is meaningless for `Sink::Caller`.
+  The caller owns the audio, so it owns transport. Those operations MUST return
+  `unsupported_operation` on such a channel rather than silently doing nothing.
+- The overlay should not render for caller-sunk speech; the game draws its own.
+- This is also the cleanest answer to §10.7's mixing question. If a caller wants
+  overlapping voices, it takes the PCM and mixes it in an engine already built to
+  mix. Vroca does not become a mixer.
+- It makes Vroca usable as a synthesis *library over IPC*, which is a broader
+  role than a desktop reader, and worth deciding deliberately rather than
+  drifting into.
+
+Pitch-corrected speed is a property of mpv, so `Sink::Caller` audio arrives at
+natural rate and the caller applies its own rate control, or asks for a
+synthesis-time speed instead.
+
 ### 10.8 Open Questions Raised By This Section
 
 | # | Question | Blocks |
@@ -1937,6 +2028,9 @@ feature on the hotkey surface, in exchange for capabilities not yet needed.
 | 10-k | Is chunking enabled per engine by capability, and what is the boundary rule — clauses, punctuation, or token count? | §10.3 |
 | 10-l | Is an out-of-process GPU engine (Qwen3-TTS via local vLLM) in scope, and who owns its lifecycle — Vroca, systemd, or the user? | §10.6b |
 | 10-m | Should the HTTP engine surface endpoint locality to the user, so a localhost GPU is visibly different from a third-party API? | §10.6b, privacy |
+| 10-n | How is `Sink::Caller` audio delivered — length-prefixed stream, or a passed file descriptor over a shared ring buffer? | §10.7a |
+| 10-o | Does a caller-sunk channel suppress the overlay automatically, or is that a separate flag? | §10.7a |
+| 10-p | Does `Urgency.weight` survive review, or is the class alone sufficient? | §10.4 |
 
 ### 10.9 Effect On The First Slice
 

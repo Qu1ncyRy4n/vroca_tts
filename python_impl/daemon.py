@@ -404,7 +404,11 @@ class Reader:
         if self._asr is None:
             import sherpa_onnx
             d = self.model_dirs["asr"]
-            self._asr = sherpa_onnx.OfflineRecognizer.create_from_transducer(
+            # from_transducer, not create_from_transducer: sherpa-onnx renamed
+            # this. The old name raised AttributeError, _align swallowed it, and
+            # the daemon silently used the energy aligner while status kept
+            # reporting "asr". It also broke zipvoice's reference transcription.
+            self._asr = sherpa_onnx.OfflineRecognizer.from_transducer(
                 tokens=f"{d}/tokens.txt",
                 encoder=f"{d}/encoder-epoch-99-avg-1.int8.onnx",
                 decoder=f"{d}/decoder-epoch-99-avg-1.onnx",
