@@ -1607,6 +1607,7 @@ are revisited deliberately rather than discovered to be wrong later.
 | R5 | Interruption is explicit and restricted, rather than an accident of arrival order. | User, this session |
 | R6 | Game-style voices: portable, designed, distinct, and identical across sessions and players. | User, this session |
 | R7 | Callers may take the synthesized audio themselves instead of Vroca playing it, so a game can route speech through its own audio engine. | User, this session |
+| R8 | Basic level control: a master volume and a per-voice trim, exposed as a panel slider. | User, this session |
 
 ### 10.2 Measured Evidence
 
@@ -2011,6 +2012,39 @@ Pitch-corrected speed is a property of mpv, so `Sink::Caller` audio arrives at
 natural rate and the caller applies its own rate control, or asks for a
 synthesis-time speed instead.
 
+### 10.7b Level Control
+
+R8 asks for basic volume control: a master level, plus a per-voice trim such as
+cutting one voice by 15%, with a slider in the panel.
+
+**Recommendation: adopt it, and keep it in the player.** mpv already exposes a
+`volume` property, so master level is a `set_property` call plus a durable
+preference. Nothing needs to touch synthesis.
+
+The per-voice trim is the more valuable half and the reason to do this at all.
+Voices differ materially in loudness, so changing voice currently changes
+perceived volume, and with multiple voices in one queue (§10.4) that becomes a
+constant irritation rather than an occasional one. A trim stored per `VoiceId`
+and applied when that voice plays fixes it once.
+
+```text
+master_gain            durable, applies to everything Vroca speaks
+voice_trim[VoiceId]    durable, relative offset for one voice
+effective = master_gain + voice_trim[current]
+```
+
+Open points, none blocking:
+
+- Gain belongs in the **player**, not in synthesis. Scaling samples before
+  writing them bakes the level into the cached audio, so changing the trim would
+  require re-rendering, and clipping becomes possible. A player property is
+  reversible and free.
+- `Sink::Caller` (§10.7a) has no player, so trims MUST be reported to the caller
+  as metadata rather than applied. The caller owns its mixer.
+- Whether trims are authored by hand or measured automatically from voice
+  loudness is **Open**. Automatic measurement fits the same offline pass that
+  produces voice traits (§10.5, Decision 12).
+
 ### 10.8 Open Questions Raised By This Section
 
 | # | Question | Blocks |
@@ -2031,6 +2065,7 @@ synthesis-time speed instead.
 | 10-n | How is `Sink::Caller` audio delivered — length-prefixed stream, or a passed file descriptor over a shared ring buffer? | §10.7a |
 | 10-o | Does a caller-sunk channel suppress the overlay automatically, or is that a separate flag? | §10.7a |
 | 10-p | Does `Urgency.weight` survive review, or is the class alone sufficient? | §10.4 |
+| 10-q | Are per-voice trims authored by hand, or measured in the offline traits pass? | §10.7b |
 
 ### 10.9 Effect On The First Slice
 

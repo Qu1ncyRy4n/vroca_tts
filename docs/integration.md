@@ -112,6 +112,20 @@ A catalogue entry looks like:
 **Prefer ids over indexes.** An index only means something relative to the
 currently loaded engine, and it can shift if a model is updated. Ids are stable.
 
+**Names are scoped to the engine that is currently loaded.** `af_kore` is a
+kokoro voice, so asking for it while libritts is loaded returns
+`unknown voice: af_kore` even though the name is perfectly valid. Switch first:
+
+```sh
+tts engine kokoro
+tts voice af_kore
+```
+
+Read `engine` from `status` before selecting a voice by name, or select the
+engine explicitly. **Changing:** an engine-qualified form, `kokoro:af_kore`,
+which switches automatically. See `rust-spec.md` Decision 10 and
+[`roadmap.md`](roadmap.md) A3.
+
 ### Engine and playback
 
 | Command | Argument | Effect |
@@ -268,3 +282,104 @@ tts                     # no args == read selection
 The `tts` shell client forwards trailing arguments only for `say`, `speak` and
 `queue`. `tts speed 1.2` sends a bare `speed`. Use the socket directly for other
 commands with arguments.
+
+---
+
+## 8. Using Qwen3-TTS Through Vroca
+
+Qwen3-TTS is a separate model family — Apache-2.0, streaming at about 97 ms,
+with natural-language voice design and cloning. It does not run inside the
+Vroca daemon (see [`roadmap.md`](roadmap.md) Track D). It connects over HTTP.
+
+Vroca already has the adapter. The engine named `remote` speaks the
+OpenAI-compatible `/v1/audio/speech` shape, and both hosted providers and local
+servers expose exactly that for Qwen3-TTS.
+
+### Configure it
+
+Put this in `~/.config/tts/env`, which the systemd unit reads and which is
+deliberately outside the repository and the Nix store:
+
+```sh
+TTS_API_BASE=https://api.deepinfra.com/v1/openai
+TTS_API_KEY_FILE=/home/you/.config/tts/key
+TTS_API_MODEL=Qwen/Qwen3-TTS-VoiceDesign
+TTS_API_VOICES=Vivian,Ryan,Serena
+```
+
+Keep the key in its own file, read at call time. Never put it in a Nix
+expression — derivations land in world-readable `/nix/store`.
+
+Then `engine remote` and the usual `voice`, `say`, and `queue` commands work
+unchanged. `remote` only appears in the `engines` list when both the base URL
+and the key file are present.
+
+For a local server instead, point `TTS_API_BASE` at it. vLLM and several
+community FastAPI wrappers serve the same endpoint shape.
+
+### What works today, and what does not
+
+| Capability | Status through Vroca |
+|:---|:---|
+| Preset voices | **Works now.** Configuration only, no code change. |
+| Cloning profiles, where the server exposes `voice="clone:Name"` | **Works now** — it is just a voice string. |
+| Natural-language voice design (`instruct`) | **Needs a small adapter change.** The parameter is not in OpenAI's schema, so the current request builder has nowhere to put it. |
+| Streaming, the 97 ms figure | **Not available.** The adapter reads the whole response, then parses a WAV. Getting real streaming needs incremental playback — the same machinery as chunking in `rust-spec.md` §10.3. |
+| Retries, timeouts, error mapping | Minimal. One 60-second timeout, no retry, failures surface as a bare string. |
+
+So: **preset voices are a configuration change**, voice design is a small patch,
+and low latency is a real project rather than a flag.
+
+### Cost and privacy
+
+Hosted inference is billed per character — DeepInfra lists Qwen3-TTS-VoiceDesign
+at $20 per million characters at time of writing. Reading long documents aloud
+will consume that quickly, so `remote` is better suited to short, deliberate
+speech than to bulk reading.
+
+**Text leaves the machine.** Every other engine is local and nothing is
+transmitted. Choosing `remote` sends whatever you speak to the configured
+endpoint. If that endpoint is `localhost`, nothing leaves — but the engine name
+does not distinguish the two, so verify `TTS_API_BASE` rather than trusting the
+label. This is tracked as a design problem in `rust-spec.md` §10.6b.
+
+---
+
+## 9. Custom Voices: How Cloning Actually Works
+
+Worth understanding, because it determines what you need to supply.
+
+**You supply ordinary speech.** Not a phoneme inventory, not a spectrum sweep,
+not a test tone. Five to twenty seconds of someone talking normally. The
+reference clip shipped with this repo is 5.1 seconds of a plain spoken sentence.
+
+**It does not need to contain every sound.** This is the part that seems
+impossible and is not. The model was pretrained on thousands of speakers, so it
+already knows how English phonemes are articulated in general. Your clip is not
+teaching it to speak. It is answering a much narrower question: *whose* voice.
+
+From the clip the model extracts a speaker embedding — a vector capturing
+timbre, pitch range, resonance, and speaking style. Synthesis then renders any
+text through that identity, including sounds absent from your reference.
+
+The useful analogy is instrument identification rather than sampling. A sampler
+needs every note recorded. This identifies *which instrument* from a short
+phrase, then plays notes it never heard.
+
+**So yes — a plain spoken sample is all it takes**, and that is the whole
+interface. Practical guidance:
+
+- Clean audio matters more than length. Background noise gets modelled as part
+  of the voice.
+- Consistent delivery helps. A clip swinging between whisper and shout produces
+  an unstable identity.
+- Supply the transcript as `<name>.txt` beside the clip rather than relying on
+  automatic transcription.
+
+**Why ship a `.wav` rather than the embedding vector.** The vector is smaller and
+skips the encoding step, so shipping it looks more efficient. It is not, for
+anything long-lived. An embedding lives in one model's latent space, so a model
+upgrade or a switch to a different engine invalidates it. A `.wav` re-clones
+correctly against any future model, including ones that do not exist yet. For a
+voice that must stay stable for years — a game character — the audio is the
+durable artifact and the vector is a cache.

@@ -19,6 +19,8 @@ Vroca is a text-to-speech and assistive reading framework. The current implement
 
 `docs/integration.md` is the guide for programs that call Vroca rather than implement it. Point external callers there. Keep it accurate when the socket surface, error strings, or limits change.
 
+`docs/roadmap.md` is the sequencing plan: what is done, what is next, and what is still being designed.
+
 `docs/pickup_notes.md` is a working handoff and roadmap. `README.md` is a short orientation.
 
 # Vroca Boundaries
