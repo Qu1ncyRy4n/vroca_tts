@@ -431,12 +431,16 @@ class Reader:
             return f"aligner {name}"
 
     def set_font_size(self, size):
+        if size is None:
+            return "font_size needs a number between 12 and 72"
         self.font_size = max(12, min(72, int(size)))
         save_prefs(self)
         self._dump()
         return f"font_size {self.font_size}"
 
     def set_words_visible(self, count):
+        if count is None:
+            return "words_visible needs a number between 1 and 15"
         self.words_visible = max(1, min(15, int(count)))
         save_prefs(self)
         self._dump()
@@ -516,6 +520,27 @@ class Reader:
             names.append("remote")
         return names
 
+    def resolve_voice(self, token):
+        """Catalogue sid for a voice named by id, display name, or index.
+
+        Callers address voices the way the catalogue prints them, so `af_kore`
+        has to work as well as `11`. Returns None when nothing matches, which
+        the dispatch reports rather than guessing a voice.
+        """
+        if token is None:
+            return None
+        token = token.strip()
+        try:
+            return int(token)
+        except ValueError:
+            pass
+        want = token.lower()
+        for entry in self.catalogue():
+            if want in (str(entry.get("id", "")).lower(),
+                        str(entry.get("name", "")).lower()):
+                return entry["sid"]
+        return None
+
     def set_voice(self, sid):
         if not (isinstance(sid, int) and 0 <= sid < self.voices()):
             return f"voice index out of range: {sid} (0..{self.voices() - 1})"
@@ -543,6 +568,8 @@ class Reader:
             return 1
 
     def set_speed(self, speed):
+        if speed is None:
+            return f"speed needs a number between {SPEED_MIN} and {SPEED_MAX}"
         self.speed = max(SPEED_MIN, min(SPEED_MAX, speed))
         self.mpv.cmd("set_property", "speed", self.speed)
         save_prefs(self)
@@ -723,7 +750,7 @@ class Reader:
 
     def preview(self, sid):
         with self.lock:
-            if not (0 <= sid < self.voices()):
+            if not (isinstance(sid, int) and 0 <= sid < self.voices()):
                 return "out of range"
             try:
                 samples, rate = self._ensure().generate(
@@ -769,6 +796,22 @@ class Reader:
                 self.queue.pop(0)
                 return f"skipped item (queue length: {len(self.queue)})"
             return self.stop()
+
+
+def _num(cmd, cast):
+    """Numeric argument of `cmd`, or None when missing or unparseable.
+
+    Conversion happens here rather than at the call site because an uncaught
+    ValueError in the command dispatch terminates the daemon: a client sending
+    `voice af_kore` crash-looped the service 51 times before this existed.
+    """
+    parts = cmd.split()
+    if len(parts) < 2:
+        return None
+    try:
+        return cast(parts[1])
+    except ValueError:
+        return None
 
 
 def selection():
@@ -1027,23 +1070,29 @@ def main():
             elif cmd.startswith("queue "):
                 reply = reader.enqueue(cmd.split(" ", 1)[1])
             elif cmd.startswith("speed "):
-                reply = reader.set_speed(float(cmd.split()[1]))
+                reply = reader.set_speed(_num(cmd, float))
             elif cmd.startswith("voice "):
-                reply = reader.set_voice(int(cmd.split()[1]))
+                token = cmd.split(None, 1)[1]
+                sid = reader.resolve_voice(token)
+                reply = (f"unknown voice: {token}" if sid is None
+                         else reader.set_voice(sid))
             elif cmd.startswith("engine "):
                 reply = reader.set_engine(cmd.split()[1])
             elif cmd.startswith("aligner "):
                 reply = reader.set_aligner(cmd.split()[1])
             elif cmd.startswith("font_size "):
-                reply = reader.set_font_size(int(cmd.split()[1]))
+                reply = reader.set_font_size(_num(cmd, int))
             elif cmd.startswith("words_visible "):
-                reply = reader.set_words_visible(int(cmd.split()[1]))
+                reply = reader.set_words_visible(_num(cmd, int))
             elif cmd.startswith("position "):
                 reply = reader.set_position(cmd.split()[1])
             elif cmd == "catalogue":
                 reply = json.dumps(reader.catalogue())
             elif cmd.startswith("preview "):
-                reply = reader.preview(int(cmd.split()[1]))
+                token = cmd.split(None, 1)[1]
+                sid = reader.resolve_voice(token)
+                reply = (f"unknown voice: {token}" if sid is None
+                         else reader.preview(sid))
             else:
                 reply = f"unknown: {cmd}"
             try:
