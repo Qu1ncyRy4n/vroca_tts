@@ -19,12 +19,10 @@
 
 ---
 
-## Before The Next Deployment Update
+## Handoff
 
-`measure.py` now imports `engines`, so `~/nix-dotfiles/home/tts.nix` must copy
-`engines.py` into `measureSrc` instead of `daemon.py` **before** the `vroca_tts`
-lock is updated. Otherwise `pitchTables` fails to build. See
-[`roadmap.md`](roadmap.md) A4 for the exact diff.
+[`handoff.md`](handoff.md) is the entry point for anyone picking this up: the
+document map, the traps that cost real time, and what to do next.
 
 ## Staged Rust Replacement Roadmap (`rust_impl/`)
 

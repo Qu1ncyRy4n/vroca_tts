@@ -17,9 +17,17 @@ justification, a 27-entry mismatch register tying every finding to a line of
 code, and the first slice bounded. `rust_impl/` has a scaffolded three-crate
 workspace.
 
-**Recently fixed in Python.** Malformed arguments no longer kill the daemon
-(D8, which had crash-looped the service 51 times); voices can be selected by
-name; the ASR aligner works again after a silent API-rename breakage (N27).
+**Track A is complete, deployed, and verified against the live daemon.**
+Malformed arguments no longer kill the daemon (D8, which had crash-looped the
+service 51 times); the ASR aligner works again after a silent API-rename
+breakage (N27); voices are selectable by name and by engine-qualified name;
+master volume and per-voice trim ship with panel sliders; queue items carry
+their own voice; engine construction is extracted so daemon edits no longer
+re-measure 904 voices.
+
+**The first Rust slice exists but is unreviewed.** `rust_impl/` compiles with 19
+passing tests. It was not authored during the design session and has not been
+checked against the specification. See [`handoff.md`](handoff.md) §6.
 
 ---
 
@@ -29,7 +37,7 @@ These are worth doing now because they are small, they improve daily use, and
 each one de-risks the equivalent Rust work by settling semantics against real
 usage first.
 
-### A1. Per-voice and master volume — **done**
+### A1. Per-voice and master volume — **done, deployed**
 
 mpv exposes a `volume` property, so this is a set_property call plus a
 preference plus a panel slider. Two levels are worth having:
@@ -45,7 +53,7 @@ per `VoiceId` fixes that once rather than every time.
 
 **Cost:** small. Bounded by the panel work, not the daemon work.
 
-### A2. Multiple voices in one queue — **done** (same engine)
+### A2. Multiple voices in one queue — **done, deployed** (same engine)
 
 Confirmed by reading the code: `sid` is a **per-call** argument to
 `generate()`, not model state. Only one line binds it —
@@ -74,7 +82,7 @@ reasonable ceiling to design for.
 **Cost:** small for the same-engine case. Do not let it grow into cross-engine
 residency; that belongs in Rust.
 
-### A3. Engine-qualified voice names — **done**
+### A3. Engine-qualified voice names — **done, deployed**
 
 Voice names today resolve only within the loaded engine, so a client asking for
 `af_kore` while libritts is loaded gets `unknown voice`. This is exactly what
@@ -92,10 +100,11 @@ hit it.
 **Cost:** small. Note that switching engines forces a model reload, so the reply
 must not pretend it was instant.
 
-### A4. Stop `daemon.py` edits from rebuilding the pitch tables — **done in repo; deployment change now REQUIRED**
+### A4. Stop `daemon.py` edits from rebuilding the pitch tables — **done, deployed**
 
-> **Blocking.** Do not update the `vroca_tts` lock in `~/nix-dotfiles` until the
-> `tts.nix` line below is changed. `measure.py` now imports `engines`, which
+> **Resolved.** `tts.nix` was updated and the rebuild succeeded. Kept for the
+> record, because the ordering trap recurs whenever a new import is added:
+> do not update the `vroca_tts` lock before the `tts.nix` line below. `measure.py` now imports `engines`, which
 > `measureSrc` does not copy, so the `pitchTables` derivation fails with
 > `ModuleNotFoundError: No module named 'engines'`. Verified by reproducing the
 > derivation's inputs. This is not an optimization any more; it is a hard
@@ -144,7 +153,7 @@ Sequencing from `rust-spec.md` §9.3. Track A does not block any of it.
 |:---|:---|:---|
 | 1 | Lock first-slice decisions | **Done** |
 | 2 | Rust toolchain and workspace | **Done** — flake has the toolchain, workspace scaffolded |
-| 3 | Typed operations, state transitions, protocol parsers. No audio. | Next |
+| 3 | Typed operations, state transitions, protocol parsers. No audio. | **Implemented, unreviewed** — see `handoff.md` §6 |
 | 4 | Public client and CLI against a fake daemon | |
 | 5 | Daemon lifecycle, fake engine and player | |
 | 6 | One local engine, real playback | |
@@ -196,10 +205,9 @@ endpoint is the practical path on this hardware.
 
 ## Suggested Order
 
-1. **Change the `measureSrc` line in `~/nix-dotfiles/home/tts.nix` (A4), then
-   update the `vroca_tts` lock and rebuild.** In that order. Updating the lock
-   first fails the build. A1 through A3 are implemented and ship with the same
-   update.
+1. ~~Change `measureSrc`, update the lock, rebuild.~~ **Done and verified live:**
+   `voice kokoro:af_kore` resolves across engines, `trim -15` gives effective
+   65, and two queued items retain distinct voices.
 2. **Rust stage 3** — the first real slice.
 3. Track C questions as they start blocking Track B. `scripts/multivoice_demo.py`
    answers 10-a by ear: play the alternating and overlapping halves and note
