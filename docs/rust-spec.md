@@ -234,6 +234,23 @@ the earlier draft listed as hypothetical are actually occurring.
 | Restart churn | `systemctl --user show tts.service` | `NRestarts=5`, `MainPID=207703` |
 | Catalogue response size | `printf catalogue \| socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/tts.sock \| wc -c` | 101,359 bytes for libritts |
 | Socket exposure | `ls -l $XDG_RUNTIME_DIR` | `srw-rw-rw-` inside a `0700` directory |
+| **D8 crashing in production** | `journalctl --user -u tts.service` | `ValueError: invalid literal for int() with base 10: 'af_kore'` at `daemon.py:1032`, then `status=1/FAILURE`. Restart counter reached **51**. |
+
+### 4.1 The `voice af_kore` Crash
+
+D8 is not a latent risk. It is the active failure mode of this service. A client
+sent `voice af_kore` — a voice *name* — and `int('af_kore')` raised, killing the
+daemon. systemd restarted it, and the restart counter reached 51.
+
+`af_kore` is a real kokoro voice ID from `voices.py:10`. Someone was addressing a
+voice the way the catalogue names it. This is direct evidence for Decision 10:
+the numeric-index API is not merely fragile in theory, it is failing the people
+using it, and the natural thing to type crashes the daemon.
+
+Two requirements follow, and neither is negotiable:
+
+1. Malformed arguments MUST return a typed error (D8).
+2. `voice <name>` MUST be a valid request (Decision 10).
 
 Live preferences at time of inspection:
 
@@ -270,7 +287,7 @@ left Open in section 7.
 
 | ID | Finding | Evidence |
 | --- | --- | --- |
-| D8 | `float()` and `int()` on malformed arguments raise and terminate the daemon: `speed`, `voice`, `font_size`, `words_visible`, `preview`. | `daemon.py:1030,1032,1038,1040,1046` |
+| D8 | `float()` and `int()` on malformed arguments raise and terminate the daemon: `speed`, `voice`, `font_size`, `words_visible`, `preview`. **Confirmed in production: `voice af_kore` crashed the service to a restart counter of 51.** See §4.1. | `daemon.py:1030,1032,1038,1040,1046` |
 | N5 | The response uses `conn.send()`, not `sendall()`, and discards the return value. The libritts `catalogue` response measures **101,359 bytes** against an effective Unix-socket payload capacity of roughly 106 KB. Margin is under 5% and shrinks as voices are added. A partial write silently truncates JSON; the panel's `json.loads` then fails and it shows an empty voice list. | `daemon.py:1049-1052`; measured |
 | N6 | A single `conn.recv(4096)`. Longer text is truncated, possibly mid-UTF-8. `errors="replace"` turns that into corruption rather than a failure. | `daemon.py:988-989` |
 | N7 | `strip()` runs before dispatch, so `tts say ""` arrives as `say` and returns `unknown: say`. Leading and trailing whitespace in spoken text is also lost. | `daemon.py:989,1025` |
@@ -332,6 +349,10 @@ Seventeen binding decisions. Each was raised and answered before being recorded.
 ---
 
 ### Decision 1 — Queue And Replacement Semantics
+
+> **Revision pending (§10.4).** Multi-voice channels add a scope axis to
+> replacement. `Replace::All` must become channel-scoped by default, or one
+> agent's speech will discard another's.
 
 **Status:** Decided.
 
@@ -522,6 +543,11 @@ both directions producing typed errors; both sockets removed on clean shutdown.
 ---
 
 ### Decision 4 — Concurrency Model
+
+> **Revision pending (§10.5).** Concurrent synthesis across voices depends on
+> `sherpa-onnx` thread safety, which is unverified (§10.8, 10-f). Note also
+> that the engines cannot abort mid-synthesis, so the generation counter
+> discards rather than cancels; chunking (§10.3) bounds the waste.
 
 **Status:** Decided.
 
@@ -779,6 +805,10 @@ the reader's last good state intact; staleness detectable after daemon exit.
 
 ### Decision 9 — Player
 
+> **Confirmed by §10.7.** The player trait is what keeps overlapping voices
+> and in-process mixing reachable without touching domain code. Chunked
+> playback (§10.3) adds a gapless requirement to the player interface.
+
 **Status:** Decided. **Resolves N1, N4, D9. Contributes to N2.**
 
 **Current behavior.** `mpv` runs as a child process with a JSON IPC socket at a
@@ -839,6 +869,10 @@ directory or child process survives clean shutdown.
 ---
 
 ### Decision 10 — Voice Identity
+
+> **Refinement pending (§10.5).** Residency is keyed by model, not voice, so
+> `VoiceId` resolves through `(ModelId, SpeakerIndex)`. Live evidence for this
+> decision is in §4.1: `voice af_kore` crashed the service 51 times.
 
 **Status:** Decided.
 
@@ -1098,6 +1132,10 @@ independently; atomicity under a concurrent state change.
 ---
 
 ### Decision 14 — Preview Playback
+
+> **Simplification available (§10.4).** If channels are adopted, preview
+> becomes an ephemeral high-priority channel and the interrupt-then-restore
+> machinery mostly disappears.
 
 **Status:** Decided.
 
@@ -1363,6 +1401,11 @@ so `0666` grants nothing and only misstates the boundary.
 known to be thread-safe. Keep prefetch fixed at 5 until dogfooding says
 otherwise.
 
+**Escalated by §10.5.** Multi-voice makes this urgent rather than deferrable,
+and "not known to be thread-safe" must become a tested fact (§10.8, 10-f)
+before concurrent synthesis is built on it. Chunking (§10.3) also changes the
+prefetch unit from the sentence to the chunk.
+
 ### 7.5 Snapshot Text Exposure
 
 **Question.** Should the published snapshot expose full submitted text, the
@@ -1458,9 +1501,9 @@ documents.
 
 ### 7.13 Undecided Compatibility Details
 
-- Whether `unload` remains useful once engine loading is redesigned. It exists
-  today mainly to free memory, and N18 shows the panel handles its consequences
-  badly.
+- ~~Whether `unload` remains useful once engine loading is redesigned.~~
+  **Answered by §10.5:** it survives and is promoted into a model residency
+  surface keyed by `ModelId`. N18 remains a defect to fix in the panel.
 - Whether the `tts-state.json` file is a public interface or only a migration
   artifact (interacts with Decision 8).
 - Whether a spool file remains useful now that a public local API is specified
@@ -1530,11 +1573,11 @@ Rust MAY replace Python in deployment only when all of the following hold.
 ### 9.3 Migration Stages
 
 1. Lock the decisions needed for the first slice. **Complete — section 6.**
-2. Add the Rust toolchain and the reviewed workspace shape.
+2. Add the Rust toolchain and the reviewed workspace shape. **Done**
 3. Typed operations, state transitions, and protocol parsers with no audio
-   dependency.
-4. Public client and CLI against a fake daemon.
-5. Daemon lifecycle with fake engine and fake player.
+   dependency. **Done**
+4. Public client and CLI against a fake daemon. **Done**
+5. Daemon lifecycle with fake engine and fake player. **Done**
 6. One local synthesis engine and real playback.
 7. Remaining approved local engines and alignment.
 8. Overlay and panel through the shared client.
@@ -1542,3 +1585,224 @@ Rust MAY replace Python in deployment only when all of the following hold.
 10. Update `~/nix-dotfiles` in a separately approved deployment change.
 11. Observe the Rust service with a documented Python rollback.
 12. Retire Python in a later, separate decision.
+
+---
+
+## 10. Multi-Voice, Model Residency, And Playback Latency
+
+**Status: Proposed and Open.** This section records requirements raised after the
+first seventeen decisions were locked. Nothing here is Decided. It exists so the
+first slice does not foreclose these capabilities, and so the affected decisions
+are revisited deliberately rather than discovered to be wrong later.
+
+### 10.1 The Requirements
+
+| # | Requirement | Origin |
+| --- | --- | --- |
+| R1 | Multiple voices usable at the same time, so different local agents speak in different voices — for example an architect agent and an implementation agent. | User, this session |
+| R2 | Preload and unload models through the API and CLI. | User, this session |
+| R3 | Voices sourced from a local directory, so a repository can carry the voices its agents use. | User, this session |
+| R4 | Lower playback latency than waiting for a whole sentence to render. | User, this session |
+
+### 10.2 Measured Evidence
+
+Measured on this host through the Nix dev shell, against the deployed models.
+These numbers constrain the design, so they are recorded rather than summarized.
+
+**Synthesis is not streaming for the current engines.** `sherpa-onnx`'s
+`OfflineTts.generate` accepts a `callback(samples, progress)` that can return
+non-zero to stop early. For kokoro and libritts the callback fires **once, at the
+end**. There is no partial audio to play and no mid-synthesis abort.
+
+| Engine | Sentence audio | Full synthesis | RTF | Callback chunks |
+| --- | --- | --- | --- | --- |
+| kokoro | 5263 ms | 4630 ms | 0.88 | 1 |
+| libritts | 4679 ms | 139 ms | 0.03 | 1 |
+| supertonic | 6344 ms | 1106 ms | 0.17 | 1 |
+
+**Splitting the sentence does work.** Same sentence, cut in two:
+
+| Engine | Whole sentence | First chunk | First audio at | Saved | Underrun? |
+| --- | --- | --- | --- | --- | --- |
+| kokoro | 4630 ms | 3562 ms audio in 3141 ms | 3141 ms | 1489 ms | No — chunk 2 took 2117 ms against 3562 ms of playback |
+| supertonic | 1106 ms | 4409 ms audio in 895 ms | 895 ms | 211 ms | No — 650 ms against 4409 ms |
+
+**The wav file is not the bottleneck.** `$XDG_RUNTIME_DIR` is tmpfs, so writing
+the wav is a memcpy into RAM, not disk I/O.
+
+**The governing relationship.** RTF is roughly constant across chunk sizes, so:
+
+```text
+first-audio latency  ≈  RTF × duration of the FIRST chunk
+```
+
+Any engine with RTF < 1 renders chunk N+1 faster than chunk N plays, so the
+pipeline sustains indefinitely once started. Latency is therefore controlled
+almost entirely by how small the first chunk is — not by the transport, and not
+by total sentence length.
+
+### 10.3 Consequence For R4 — Latency
+
+**Recommendation.** Chunk synthesis below the sentence. Make the first chunk
+deliberately small, then grow subsequent chunks to preserve prosody. Keep writing
+chunks to tmpfs and keep mpv; a pipe or an in-process ring buffer optimizes
+something already measured to be a memcpy.
+
+Do **not** pursue the engine streaming callback as a latency fix for these
+models. It was measured and it yields one chunk.
+
+Costs that MUST be accepted or designed around:
+
+- Prosody discontinuity at chunk boundaries, because each chunk receives its own
+  utterance-level intonation. Splitting on clause boundaries limits this.
+- Word-level highlight timing must be stitched across chunks, since mpv reports
+  position per file.
+- Gapless playback across chunks becomes a player requirement.
+
+A useful side effect: chunking improves cancellation granularity. Because the
+engines cannot abort mid-synthesis, the generation counter of Decision 4 wastes
+at most one chunk instead of one whole sentence.
+
+### 10.4 Consequence For R1 — Multiple Voices
+
+The distinction that decides the architecture:
+
+- **Interleaved** — the architect speaks, then the implementer speaks. Different
+  voices, one audio stream at a time.
+- **Overlapping** — both audible simultaneously.
+
+Overlapping speech is close to unintelligible, so interleaved is assumed to be
+the real requirement. **This assumption must be confirmed before it shapes
+code**, because it is the difference between one player and a mixer.
+
+**Proposed model: channels.** Each client owns a named channel carrying its own
+voice binding and its own queue. A scheduler serializes channels onto the player.
+
+This introduces a genuinely new axis and **modifies Decision 1**. Today
+`Speak{replace: All}` clears everything, so the architect agent speaking would
+discard the implementer's queued speech. Replacement MUST become
+channel-scoped by default, with cross-channel effects explicit:
+
+```text
+Speak { channel, text, replace: Replace::{None, Active, Channel, All} }
+Stop  { channel, scope:  Scope::{Playback, Queue, All} }
+```
+
+Open consequences:
+
+- Do the `read` and `toggle` hotkeys of Decision 13 act on a user channel, the
+  active channel, or globally? Stopping should probably be global; pausing is
+  less obvious.
+- What is the scheduling policy between channels — priority, round-robin, or
+  strict arrival order?
+- Preview (Decision 14) becomes cleaner as an ephemeral high-priority channel,
+  which would simplify the interrupt-then-restore machinery.
+
+### 10.5 Consequence For R2 — Model Residency
+
+`unload` and `reload` today act on *the* single selected engine. R2 requires a
+real residency surface, which resolves the §7.13 question of whether `unload`
+survives: it does, promoted rather than removed.
+
+**The residency unit is the model, not the voice.** libritts serves 904 voices
+from one model, so loading it once serves all of them; kokoro is a separate
+model with separate memory. This **refines Decision 10**, which separates
+`VoiceId` from `SpeakerIndex` but never names the model:
+
+```text
+VoiceId  ->  (ModelId, SpeakerIndex)
+```
+
+Residency, memory accounting, and load/unload are all keyed by `ModelId`.
+
+Proposed operations, each with a CLI and API form per the core principle:
+
+```text
+model list                 resident models, memory, load state
+model load <ModelId>
+model unload <ModelId>
+```
+
+Memory is the real constraint: the journal records a 249.7 MB peak for a single
+resident engine. Multiple resident models multiply that, so a residency policy is
+required — explicit-only, or an eviction rule. **Open.** This also makes the
+§7.4 worker-count question urgent rather than deferrable, because concurrent
+synthesis across voices requires knowing whether a `sherpa-onnx` engine is
+safe to call from multiple threads. That is unverified and MUST be tested
+before any concurrency is built on it.
+
+### 10.6 Consequence For R3 — Local Voice Sources
+
+This is a **trust boundary change** and §2.3 does not cover it. Two very
+different things are easily conflated:
+
+| | Reference clips | Model files |
+| --- | --- | --- |
+| What | Short `.wav` recordings for zero-shot cloning | ONNX graphs |
+| Risk | Low. Audio data parsed as audio. | High. An arbitrary computation graph loaded into the daemon by `onnxruntime`. |
+| Already supported | Yes — zipvoice clones from `~/.config/tts/voices/*.wav` | No. All models are Nix store paths from `TTS_MODEL_DIRS`. |
+
+**The per-repo agent-voice requirement is almost certainly satisfied by
+reference clips, not model files.** zipvoice already performs zero-shot cloning
+from a 5–20 second clip. Making the clip directory configurable per repository
+delivers "the architect agent has its own voice" while keeping every executable
+model in the Nix store, hash-verified, with nothing fetched at runtime.
+
+Recommended position:
+
+1. Support per-repository **reference clips** — a configurable clone directory.
+   Low risk, mostly existing machinery.
+2. Treat per-repository **model files** as requiring an explicit, separate trust
+   decision. Loading an ONNX graph out of a cloned repository is a code-execution
+   surface. If it is ever supported it MUST be opt-in, never implied by opening a
+   directory, and confined to an allowlist.
+
+A cloned repository is untrusted input. The current design's guarantee — every
+model is a hash-verified store path — is worth more than the convenience of
+dropping an `.onnx` file into a project.
+
+### 10.7 Does This Require An In-App Player?
+
+**Not for the stated requirements.** Decision 9 already places the player behind
+a trait precisely so this stays reversible, and that decision holds up.
+
+| Need | Player required |
+| --- | --- |
+| Interleaved voices (R1 as assumed) | One mpv. Channels and a scheduler live above the player. |
+| Chunked low-latency playback (R4) | One mpv, using append-style gapless playback. |
+| Genuinely overlapping voices | N mpv instances, one per channel — cheap, and keeps pitch-corrected speed. |
+| Ducking, crossfade, precise mixing | In-process audio. This is where mpv stops being the right tool. |
+
+Recommendation: keep mpv, add channels, chunk synthesis, and revisit in-process
+audio only when overlap or ducking becomes a real requirement. Replacing mpv
+would forfeit pitch-corrected speed control, which is the single most-used
+feature on the hotkey surface, in exchange for capabilities not yet needed.
+
+### 10.8 Open Questions Raised By This Section
+
+| # | Question | Blocks |
+| --- | --- | --- |
+| 10-a | Interleaved or genuinely overlapping playback? Decides one player versus a mixer. | R1 architecture |
+| 10-b | Channel identity: client-declared name, connection identity, or explicit registration? | Protocol, DEC-1 |
+| 10-c | Channel scheduling policy: priority, round-robin, or arrival order? | Scheduler |
+| 10-d | Do the `read` and `toggle` hotkeys act per-channel or globally? | DEC-13 |
+| 10-e | Chunking policy: fixed first-chunk size, clause boundaries, or adaptive from measured RTF? | R4 |
+| 10-f | Is `sherpa-onnx` safe to call concurrently on one engine instance? **Unverified — must be tested.** | §7.4, R1, R2 |
+| 10-g | Model residency policy: explicit-only, or eviction under memory pressure? | R2 |
+| 10-h | Is per-repository model loading ever permitted, and under what trust rule? | R3, §2.3 |
+| 10-i | Does a channel bind one voice, or may it switch voices mid-queue? | DEC-1, DEC-10 |
+
+### 10.9 Effect On The First Slice
+
+Section 8 is **unchanged**. None of this requires new work in the first slice,
+but three things there MUST be shaped so this stays cheap:
+
+1. `Operation` variants carry a channel identifier from the start, even if only
+   one channel exists. Retrofitting an identifier onto a wire format is a
+   breaking change; reserving one is free.
+2. `VoiceId` resolves through `(ModelId, SpeakerIndex)` rather than assuming one
+   loaded engine.
+3. Queue state is keyed by channel internally, even with a single channel.
+
+Do not build channels, residency, chunking, or local voice sources in the first
+slice. Reserve the shape; decide the questions in §10.8 first.
