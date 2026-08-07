@@ -57,6 +57,49 @@ OVERLAP = [
 ]
 
 
+def model_dirs():
+    """Find TTS_MODEL_DIRS without making the caller export it.
+
+    The value is a Nix store map that only the packaged daemon knows, so
+    requiring it in the environment made this script unrunnable from an ordinary
+    shell. Read it from the running daemon instead, which is where it already
+    is.
+    """
+    if os.environ.get("TTS_MODEL_DIRS"):
+        return json.loads(os.environ["TTS_MODEL_DIRS"]), int(
+            os.environ.get("TTS_THREADS", "4"))
+    try:
+        pid = subprocess.run(
+            ["systemctl", "--user", "show", "tts.service", "-p", "MainPID", "--value"],
+            capture_output=True, text=True, timeout=5).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pid = ""
+    if pid and pid != "0":
+        try:
+            with open(f"/proc/{pid}/environ", "rb") as f:
+                env = dict(
+                    kv.split(b"=", 1) for kv in f.read().split(b"\0") if b"=" in kv)
+            raw = env.get(b"TTS_MODEL_DIRS")
+            if raw:
+                return (json.loads(raw.decode()),
+                        int(env.get(b"TTS_THREADS", b"4").decode()))
+        except (OSError, ValueError):
+            pass
+    sys.exit(
+        "Could not find the model paths.\n"
+        "They live in the Nix store and are known to the packaged daemon, so\n"
+        "either start it:\n"
+        "    systemctl --user start tts\n"
+        "or set them yourself:\n"
+        "    export TTS_MODEL_DIRS='{\"libritts\": \"/nix/store/...\"}'")
+
+
+def daemon_supports_per_item_voice(send):
+    """Whether the running daemon has the --voice argument (roadmap A2)."""
+    reply = send("queue --voice sid0 ")
+    return "unknown" not in reply.lower()
+
+
 def render(engine, lines, outdir, label):
     """Synthesize each line to its own wav. Returns paths in order."""
     paths = []
@@ -142,6 +185,15 @@ def via_daemon(lines):
     print(f"\n--- VIA DAEMON: engine {ENGINE}, per-item voices ---")
     print(" ", send(f"engine {ENGINE}"))
     print(" ", send("stop"))
+    if not daemon_supports_per_item_voice(send):
+        send("stop")
+        sys.exit(
+            "The running daemon predates per-item voices (roadmap A2).\n"
+            "Update the vroca_tts lock in ~/nix-dotfiles and rebuild --\n"
+            "but change the measureSrc line in home/tts.nix first, or the\n"
+            "pitchTables derivation will fail. See docs/roadmap.md A4.\n"
+            "Meanwhile the standalone demo works: run without --daemon.")
+    send("stop")
     for sid, text in lines:
         print(" ", send(f"queue --voice sid{sid} {text}"))
 
@@ -160,15 +212,7 @@ def main():
         via_daemon(DIALOGUE)
         return
 
-    if "TTS_MODEL_DIRS" not in os.environ:
-        sys.exit("TTS_MODEL_DIRS is not set. Run inside the daemon's environment,\n"
-                 "or copy it from a running daemon:\n"
-                 "  export TTS_MODEL_DIRS=\"$(tr '\\0' '\\n' "
-                 "< /proc/$(systemctl --user show tts.service -p MainPID --value)/environ "
-                 "| grep '^TTS_MODEL_DIRS=' | cut -d= -f2-)\"")
-
-    md = json.loads(os.environ["TTS_MODEL_DIRS"])
-    threads = int(os.environ.get("TTS_THREADS", "4"))
+    md, threads = model_dirs()
     outdir = tempfile.mkdtemp(prefix="vroca-demo-")
 
     print(f"loading {args.engine}...")
