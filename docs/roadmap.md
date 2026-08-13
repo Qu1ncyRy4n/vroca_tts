@@ -145,6 +145,23 @@ costs nothing. Revisit if kokoro's voices are worth the seams.
 
 ---
 
+## Deploying While You Work
+
+`scripts/deploy.sh` rebuilds the system from the current working tree, so a
+change here reaches the running daemon without updating the deployment lock:
+
+```sh
+./scripts/deploy.sh --dry     # evaluate only
+./scripts/deploy.sh           # rebuild and restart tts.service
+```
+
+It overrides the `vroca_tts` input for one invocation using `git+file:`, which
+respects `.gitignore`. The previous `path:` input copied 461 MB — almost all of
+it `rust_impl/target` — with a hash that changed on every `cargo build`, which is
+why the lock went stale constantly. See [`handoff.md`](handoff.md) §5.
+
+---
+
 ## Track B — The Rust Replacement
 
 Sequencing from `rust-spec.md` §9.3. Track A does not block any of it.
