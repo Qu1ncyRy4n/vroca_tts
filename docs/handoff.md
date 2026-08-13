@@ -113,9 +113,24 @@ Unix socket paths cap at 108 bytes — a long temp path fails with a confusing
 Each of these cost real time. They are not hypothetical.
 
 **The deployment lock is a snapshot.** `~/nix-dotfiles/flake.lock` pins
-`vroca_tts` by `lastModified`. Committing here changes nothing until
+`vroca_tts` by content hash, so committing here changes nothing until
 `nix flake update vroca_tts` — note the **underscore**. And a rebuild may leave
 the old process running; check `MainPID` and restart explicitly.
+
+Use `scripts/deploy.sh` instead while iterating. It overrides the input for one
+invocation, so the lock never goes stale and never needs updating:
+
+```sh
+./scripts/deploy.sh --dry     # evaluate only
+./scripts/deploy.sh           # rebuild and restart the service
+```
+
+**`path:` copies gitignored files; `git+file:` does not.** The deployment input
+was `path:`, which has no git awareness and copied the whole directory into the
+store — 461 MB, almost all of it `rust_impl/target`, with a hash that changed on
+every `cargo build`. That is why the lock went stale constantly once Rust work
+started. `git+file:` respects `.gitignore` and copies 540 KB. Measured, not
+estimated. `deploy.sh` uses `git+file:` for exactly this reason.
 
 **`measureSrc` and `engines.py` are coupled.** `~/nix-dotfiles/home/tts.nix`
 copies specific files for the pitch-table derivation. If `measure.py` gains an
