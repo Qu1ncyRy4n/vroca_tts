@@ -19,7 +19,7 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DOTFILES="${VROCA_DOTFILES:-$HOME/nix-dotfiles}"
+DOTFILES="${VROCA_DOTFILES:-$HOME/dev/nix-config}"
 HOST="${VROCA_HOST:-desktop}"
 DRY=0
 
@@ -34,7 +34,7 @@ then restarts the user service.
   --host HOST    NixOS configuration to build (default: ${HOST})
 
 environment:
-  VROCA_DOTFILES  deployment repo (default: \$HOME/nix-dotfiles)
+  VROCA_DOTFILES  deployment repo (default: \$HOME/dev/nix-config)
   VROCA_HOST      default host name
 EOF
 }
