@@ -338,6 +338,12 @@ class Reader:
             self.engine = name
             self.sid = 0
             self.tts = None
+            # N10: cached wavs rendered by the previous engine must not
+            # survive the switch, or the next sentences keep playing old-engine
+            # audio. Spans and render timings belong to the old renders too.
+            self.cache.clear()
+            self.spans.clear()
+            self.render_ms.clear()
             save_prefs(self)
             self._dump()
             return f"engine {name}"
