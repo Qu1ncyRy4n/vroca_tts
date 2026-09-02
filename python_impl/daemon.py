@@ -1184,6 +1184,19 @@ def main():
                 reply = json.dumps(reader.status(), indent=2)
             elif cmd == "mode":
                 reply = cycle_mode()
+            elif verb == "mode_set":
+                # N14: the panel used to write tts-mode directly, violating
+                # the sole-owner rule. It now sends this operation; the daemon
+                # stays the only writer of the mode file.
+                if rest in MODES:
+                    try:
+                        with open(MODE_FILE, "w") as f:
+                            f.write(rest)
+                        reply = rest
+                    except OSError as e:
+                        reply = f"mode_set failed: {e}"
+                else:
+                    reply = f"unknown mode: {rest} (have {', '.join(MODES)})"
             elif cmd == "unload":
                 reply = reader.unload()
             elif cmd == "reload":

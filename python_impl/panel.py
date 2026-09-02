@@ -296,8 +296,9 @@ class Panel(Gtk.Application):
     def _set_mode(self, *_):
         if self._syncing:
             return
-        with open(MODE_FILE, "w") as f:
-            f.write(MODES[self.mode.get_selected()])
+        # N14: the daemon owns the mode file. This used to write it directly,
+        # racing the daemon's own cycle_mode with no atomicity.
+        send(f"mode_set {MODES[self.mode.get_selected()]}")
 
     def _match(self, item):
         q = self.search.get_text().strip().lower()
