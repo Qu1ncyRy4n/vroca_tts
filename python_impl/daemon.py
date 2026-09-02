@@ -745,18 +745,20 @@ def _read_request(conn):
     return None if total > MAX_REQUEST else b"".join(chunks)
 
 
-def _num(cmd, cast):
-    """Numeric argument of `cmd`, or None when missing or unparseable.
+def _num(arg, cast):
+    """Numeric argument, or None when missing, unparseable, or not a single
+    token.
 
     Conversion happens here rather than at the call site because an uncaught
     ValueError in the command dispatch terminates the daemon: a client sending
     `voice af_kore` crash-looped the service 51 times before this existed.
+    Extra tokens are rejected the same way: `speed 1 2` used to be silently
+    accepted as speed 1.
     """
-    parts = cmd.split()
-    if len(parts) < 2:
+    if arg is None or len(arg.split()) != 1:
         return None
     try:
-        return cast(parts[1])
+        return cast(arg)
     except ValueError:
         return None
 
@@ -1005,6 +1007,9 @@ def main():
                     pass
                 continue
             cmd = data.decode(errors="replace").strip()
+            # N7: split the verb off once. The argument text keeps its
+            # interior spacing; only the command's outer whitespace is lost.
+            verb, _, rest = cmd.partition(" ")
             if cmd == "read":
                 reply = reader.stop() if reader.is_active() else reader.read(selection())
             elif cmd == "stop":
@@ -1040,42 +1045,55 @@ def main():
                     pass
                 reader.mpv.cmd("quit")
                 os._exit(0)
-            elif cmd.startswith("say ") or cmd.startswith("speak "):
-                token, body = _split_voice(cmd.split(" ", 1)[1])
-                sid = reader.resolve_voice(token) if token else None
-                reply = (f"unknown voice: {token}" if token and sid is None
-                         else reader.read(body, sid))
-            elif cmd.startswith("queue "):
-                token, body = _split_voice(cmd.split(" ", 1)[1])
-                sid = reader.resolve_voice(token) if token else None
-                reply = (f"unknown voice: {token}" if token and sid is None
-                         else reader.enqueue(body, sid))
-            elif cmd.startswith("speed "):
-                reply = reader.set_speed(_num(cmd, float))
-            elif cmd.startswith("voice "):
-                reply = reader.select_voice(cmd.split(None, 1)[1])
-            elif cmd.startswith("volume "):
-                reply = reader.set_volume(_num(cmd, int))
-            elif cmd.startswith("trim "):
-                reply = reader.set_trim(_num(cmd, int))
-            elif cmd.startswith("engine "):
-                reply = reader.set_engine(cmd.split()[1])
-            elif cmd.startswith("aligner "):
-                reply = reader.set_aligner(cmd.split()[1])
-            elif cmd.startswith("font_size "):
-                reply = reader.set_font_size(_num(cmd, int))
-            elif cmd.startswith("words_visible "):
-                reply = reader.set_words_visible(_num(cmd, int))
-            elif cmd.startswith("position "):
-                reply = reader.set_position(cmd.split()[1])
+            elif verb in ("say", "speak", "queue"):
+                # N7: the argument is parsed off the verb, so empty text is a
+                # usage error instead of stripping down to `say` and reporting
+                # `unknown: say`. Interior whitespace survives to the
+                # normalizer, which collapses runs of whitespace anyway.
+                if not rest.strip():
+                    reply = f"{verb} needs text"
+                else:
+                    token, body = _split_voice(rest)
+                    sid = reader.resolve_voice(token) if token else None
+                    if token and sid is None:
+                        reply = f"unknown voice: {token}"
+                    elif verb == "queue":
+                        reply = reader.enqueue(body, sid)
+                    else:
+                        reply = reader.read(body, sid)
+            elif verb == "speed":
+                reply = reader.set_speed(_num(rest, float))
+            elif verb == "voice":
+                reply = (reader.select_voice(rest) if rest
+                         else "voice needs an index or name")
+            elif verb == "volume":
+                reply = reader.set_volume(_num(rest, int))
+            elif verb == "trim":
+                reply = reader.set_trim(_num(rest, int))
+            elif verb == "engine":
+                reply = (reader.set_engine(rest) if rest
+                         else "engine needs a name")
+            elif verb == "aligner":
+                reply = (reader.set_aligner(rest) if rest
+                         else "aligner needs a name")
+            elif verb == "font_size":
+                reply = reader.set_font_size(_num(rest, int))
+            elif verb == "words_visible":
+                reply = reader.set_words_visible(_num(rest, int))
+            elif verb == "position":
+                reply = (reader.set_position(rest) if rest
+                         else "position needs a name")
             elif cmd == "catalogue":
                 reply = json.dumps(reader.catalogue())
-            elif cmd.startswith("preview "):
-                token = cmd.split(None, 1)[1]
-                sid = reader.resolve_voice(token)
-                reply = (f"unknown voice: {token}" if sid is None
-                         else reader.preview(sid))
+            elif verb == "preview":
+                if not rest:
+                    reply = "preview needs a voice"
+                else:
+                    sid = reader.resolve_voice(rest)
+                    reply = (f"unknown voice: {rest}" if sid is None
+                             else reader.preview(sid))
             else:
+                # Legacy shape: the full command text, not just the verb.
                 reply = f"unknown: {cmd}"
             try:
                 # N5: the libritts catalogue response measures 101,359 bytes
