@@ -44,6 +44,18 @@ DEFAULT_FONT_SIZE = 24
 DEFAULT_WORDS_VISIBLE = 3
 DEFAULT_POSITION = "bottom"
 
+# N6: the old single recv(4096) silently truncated longer text, possibly
+# mid-UTF-8. The legacy protocol has no framing -- the connection boundary is
+# the only marker -- so a request is read until the connection goes quiet for
+# RECV_IDLE_TIMEOUT, with an explicit size limit. Over-limit input is an error
+# reply, never a truncation. The exact limit is a legacy-python choice; the
+# Rust protocol sets its own (rust-spec §7.8).
+RECV_CHUNK = 4096
+RECV_FIRST_TIMEOUT = 5.0
+RECV_IDLE_TIMEOUT = 0.025
+MAX_REQUEST = 1 << 20
+DRAIN_LIMIT = 64 << 20
+
 BOUNDARY = re.compile(r"""[.!?]+["')\]]*(?=\s)""")
 ABBREV = {"mr", "mrs", "ms", "dr", "st", "vs", "prof", "sr", "jr", "e.g", "i.e",
           "etc", "fig", "no", "approx", "inc", "ltd", "co"}
@@ -698,6 +710,41 @@ class Reader:
             return self.stop()
 
 
+def _read_request(conn):
+    """Read one legacy request.
+
+    There is no framing: a client that is still sending is indistinguishable
+    from one that has finished and is waiting for the reply. A short recv()
+    proves nothing -- a streaming client yields short reads mid-send -- so the
+    only usable end-of-request marker is a quiet gap on the connection. Reads
+    continue until the connection is idle for RECV_IDLE_TIMEOUT, the client
+    closes its write side, or the size limit is reached. Every command
+    therefore pays one idle gap (~25 ms) on top of the round trip; that is the
+    price of not truncating, and the structured protocol removes it.
+
+    Over-limit input is an error, never a truncation: the connection is
+    drained (bounded by DRAIN_LIMIT) so a well-behaved client can finish
+    sending and still receive the error reply. A client that never stops
+    sending is cut off at DRAIN_LIMIT with no reply.
+    """
+    conn.settimeout(RECV_FIRST_TIMEOUT)
+    chunks, total = [], 0
+    while True:
+        try:
+            chunk = conn.recv(RECV_CHUNK)
+        except (socket.timeout, OSError):
+            break
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > DRAIN_LIMIT:
+            return b""
+        if total <= MAX_REQUEST:
+            chunks.append(chunk)
+        conn.settimeout(RECV_IDLE_TIMEOUT)
+    return None if total > MAX_REQUEST else b"".join(chunks)
+
+
 def _num(cmd, cast):
     """Numeric argument of `cmd`, or None when missing or unparseable.
 
@@ -949,7 +996,14 @@ def main():
     while True:
         conn, _ = srv.accept()
         with conn:
-            data = conn.recv(4096)
+            data = _read_request(conn)
+            if data is None:
+                reply = f"request too large (max {MAX_REQUEST} bytes)"
+                try:
+                    conn.sendall(reply.encode())
+                except OSError:
+                    pass
+                continue
             cmd = data.decode(errors="replace").strip()
             if cmd == "read":
                 reply = reader.stop() if reader.is_active() else reader.read(selection())
