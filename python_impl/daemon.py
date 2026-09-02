@@ -623,6 +623,10 @@ class Reader:
             # N17: render timings are per item. Carrying them across items
             # mixes engines and documents into one average forever.
             self.render_ms.clear()
+            # D2: `say` is documented as clearing the active queue, not just
+            # the active sentences. The old behavior left waiting items to
+            # play after the interruption.
+            self.queue.clear()
             if not self.sents:
                 return "empty"
             self._play()
