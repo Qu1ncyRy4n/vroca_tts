@@ -532,26 +532,36 @@ class Reader:
 
     def _on_eof(self):
         with self.lock:
-            if not self.sents or self.paused:
+            if not self.sents:
                 return
+            # N12: eof can arrive while paused, when the pause lands exactly
+            # on a sentence boundary. The old early return stranded the rest
+            # of the item and the waiting queue: on resume, mpv was idle with
+            # the eof event already consumed and nothing ever advanced.
+            # Advancing while staying paused keeps the pause semantics and
+            # keeps the pipeline live.
+            paused = self.paused
             if self.idx + 1 < len(self.sents):
                 self.idx += 1
-                self._play()
+                self._play(resume=not paused)
                 return
             if self.queue:
                 self.sents, self.item_sid = self.queue.pop(0)
                 self.idx = 0
                 self.cache.clear()
                 self.spans.clear()
-                self._play()
+                self.render_ms.clear()
+                self._play(resume=not paused)
                 return
             self.sents, self.idx = [], 0
             self.item_sid = None
             self.word = -1
+            self.paused = False
             self.cache.clear()
+            self.render_ms.clear()
             self._dump()
 
-    def _play(self):
+    def _play(self, resume=True):
         self.word = -1
         w = self._wav(self.idx)
         if not w:
@@ -559,8 +569,8 @@ class Reader:
         self.mpv.cmd("loadfile", w, "replace")
         self.mpv.cmd("set_property", "speed", self.speed)
         self._apply_volume(self.item_sid)
-        self.mpv.cmd("set_property", "pause", False)
-        self.paused = False
+        self.mpv.cmd("set_property", "pause", not resume)
+        self.paused = not resume
         self.wake.set()
         self._dump()
 
