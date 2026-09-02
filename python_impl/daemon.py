@@ -701,7 +701,8 @@ class Reader:
         if not s:
             return "empty text"
         with self.lock:
-            if not self.sents or self.paused:
+            if not self.sents:
+                # Idle: the new item becomes the current one and plays now.
                 self.sents = s
                 self.idx = 0
                 self.item_sid = sid
@@ -710,15 +711,17 @@ class Reader:
                 self.render_ms.clear()
                 self._play()
                 return f"playing {len(s)} sentences"
-            else:
-                # The voice travels WITH the item. Selecting a voice and then
-                # queueing does not work: rendering happens later, so every
-                # queued item would use whichever voice is current when it is
-                # finally rendered, not the one that was selected when it was
-                # submitted.
-                self.queue.append((s, sid))
-                self._dump()
-                return f"queued {len(s)} sentences (queue length: {len(self.queue)})"
+            # D4: queue appends unconditionally. The old behavior replaced the
+            # active speech whenever the daemon was idle or paused, so
+            # queueing while paused silently discarded the paused reading.
+            # The voice travels WITH the item. Selecting a voice and then
+            # queueing does not work: rendering happens later, so every
+            # queued item would use whichever voice is current when it is
+            # finally rendered, not the one that was selected when it was
+            # submitted.
+            self.queue.append((s, sid))
+            self._dump()
+            return f"queued {len(s)} sentences (queue length: {len(self.queue)})"
 
     def clear_queue(self):
         with self.lock:
