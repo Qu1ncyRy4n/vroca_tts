@@ -283,6 +283,15 @@ class Reader:
 
     def reset_prefs(self):
         with self.lock:
+            # N8: the old reset left the engine unchanged, contradicting
+            # "resets all settings to factory defaults". N9: it also left the
+            # render cache populated, so audio rendered in the old voice kept
+            # playing afterwards. Reset now stops playback, clears rendered
+            # audio, and restores every preference including the engine.
+            # Decision 15's typed form adds named groups; the legacy verbs
+            # map to "everything".
+            self.engine = DEFAULT_ENGINE
+            self.tts = None
             self.speed = 1.0
             self.aligner = DEFAULT_ALIGNER
             self.sid = 0
@@ -291,6 +300,15 @@ class Reader:
             self.position = DEFAULT_POSITION
             self.volume = DEFAULT_VOLUME
             self.trims.clear()
+            self.mpv.cmd("stop")
+            self.sents, self.idx = [], 0
+            self.paused = False
+            self.word = -1
+            self.item_sid = None
+            self.queue.clear()
+            self.cache.clear()
+            self.spans.clear()
+            self.render_ms.clear()
             self._apply_volume()
             save_prefs(self)
             try:
