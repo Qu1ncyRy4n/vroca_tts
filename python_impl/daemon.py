@@ -124,6 +124,10 @@ class Mpv:
         )
         self.lock = threading.Lock()
         self.sock = None
+        # N4: when mpv dies, no end-file event ever arrives and commands
+        # silently no-op, so playback stalls forever with the daemon
+        # appearing healthy. The event thread records the death here.
+        self.dead = threading.Event()
         for _ in range(200):
             try:
                 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -139,6 +143,8 @@ class Mpv:
 
     def cmd(self, *args):
         with self.lock:
+            if self.dead.is_set():
+                return None
             try:
                 self.sock.send((json.dumps({"command": list(args)}) + "\n").encode())
             except OSError:
@@ -150,8 +156,10 @@ class Mpv:
             try:
                 chunk = self.sock.recv(4096)
             except OSError:
+                self._mark_dead()
                 return
             if not chunk:
+                self._mark_dead()
                 return
             buf += chunk
             while b"\n" in buf:
@@ -172,6 +180,17 @@ class Mpv:
                         self.on_pos(float(msg["data"]))
                     except Exception:
                         pass
+
+
+    def _mark_dead(self):
+        if self.dead.is_set():
+            return
+        self.dead.set()
+        # Journal-visible degraded-health signal (N4). The full fix -- restart
+        # with backoff or in-process playback -- is the Rust player work;
+        # here the stall at least becomes visible.
+        print("mpv exited; playback degraded (control operations still served)",
+              file=sys.stderr, flush=True)
 
 
 class Reader:
@@ -606,6 +625,8 @@ class Reader:
             self._dump()
 
     def _play(self, resume=True):
+        if self.mpv.dead.is_set():
+            return
         self.word = -1
         w = self._wav(self.idx)
         if not w:
@@ -645,6 +666,7 @@ class Reader:
             "effective_volume": self.effective_volume(self.item_sid),
             "item_voice": self.item_sid,
             "queue_voices": [q[1] for q in self.queue],
+            "player_alive": not self.mpv.dead.is_set(),
             "voices": (self.tts.num_speakers or 1) if self.tts else None,
             "last_render_ms": self.render_ms.get(self.idx),
             "avg_render_ms": int(sum(ms) / len(ms)) if ms else None,
