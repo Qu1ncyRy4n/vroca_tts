@@ -28,7 +28,6 @@ from engines import (
 
 RUNTIME = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
 SOCK = os.path.join(RUNTIME, "tts.sock")
-MPV_SOCK = os.path.join(RUNTIME, "tts-mpv.sock")
 STATE = os.path.join(RUNTIME, "tts-state.json")
 MODE_FILE = os.path.join(RUNTIME, "tts-mode")
 PREFS = os.path.join(CONFIG_DIR, "prefs.json")
@@ -97,13 +96,18 @@ class Mpv:
     def __init__(self, on_eof, on_pos=None):
         self.on_eof = on_eof
         self.on_pos = on_pos
-        try:
-            os.unlink(MPV_SOCK)
-        except FileNotFoundError:
-            pass
+        # N1: the IPC socket path is unique per daemon instance. The old fixed
+        # path was unconditionally unlinked at startup, so a second daemon
+        # broke the first daemon's player IPC, not only its public socket.
+        # A per-pid path needs no unlink and no ownership contest.
+        self.sock_path = os.path.join(RUNTIME, f"tts-mpv-{os.getpid()}.sock")
+        # TTS_MPV_ARGS exists for testing: `--ao=null` exercises the full
+        # playback path without touching the real audio device.
+        import shlex
+        extra = shlex.split(os.environ.get("TTS_MPV_ARGS", ""))
         self.proc = subprocess.Popen(
             ["mpv", "--idle=yes", "--no-video", "--no-terminal",
-             "--keep-open=no", f"--input-ipc-server={MPV_SOCK}"],
+             "--keep-open=no", f"--input-ipc-server={self.sock_path}"] + extra,
             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         )
         self.lock = threading.Lock()
@@ -111,7 +115,7 @@ class Mpv:
         for _ in range(200):
             try:
                 s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                s.connect(MPV_SOCK)
+                s.connect(self.sock_path)
                 self.sock = s
                 break
             except OSError:
