@@ -9,6 +9,7 @@ import os
 import socket
 import sys
 import tempfile
+import time
 
 import gi
 
@@ -98,7 +99,7 @@ def send(cmd, timeout=3.0):
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         s.settimeout(timeout)
         s.connect(SOCK)
-        s.send(cmd.encode())
+        s.sendall(cmd.encode())
         out = b""
         while True:
             chunk = s.recv(4096)
@@ -225,7 +226,9 @@ class Panel(Gtk.Application):
 
         fsrow = Gtk.Box(spacing=10)
         fsrow.append(Gtk.Label(label="RSVP Font Size"))
-        self.font_size = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 14, 48, 1)
+        # N19: the daemon clamps 12-72; the slider used to offer only 14-48,
+        # silently narrower than the documented range.
+        self.font_size = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 12, 72, 1)
         self.font_size.set_hexpand(True)
         self.font_size.set_draw_value(True)
         self.font_size.set_value(24)
@@ -236,7 +239,8 @@ class Panel(Gtk.Application):
 
         wvrow = Gtk.Box(spacing=10)
         wvrow.append(Gtk.Label(label="Scroll Context Words"))
-        self.words_vis = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 1, 9, 1)
+        # N20: the daemon clamps 1-15; the slider used to offer only 1-9.
+        self.words_vis = Gtk.Scale.new_with_range(Gtk.Orientation.HORIZONTAL, 1, 15, 1)
         self.words_vis.set_hexpand(True)
         self.words_vis.set_draw_value(True)
         self.words_vis.set_value(3)
@@ -280,7 +284,6 @@ class Panel(Gtk.Application):
 
         self.win = win
         self._syncing = False
-        self._starting = False
         self._refresh()
         GLib.timeout_add(400, self._refresh)
         win.present()
@@ -361,13 +364,23 @@ class Panel(Gtk.Application):
     def _refresh(self):
         raw = send("status", timeout=0.5)
         if raw is None:
-            if not self._starting:
-                self._starting = True
-                self.stat.set_text("daemon not running — starting…")
+            # D6: the old one-shot latch recorded a single start attempt and
+            # could stick on "starting" forever. Retry every 3 s instead; once
+            # it has clearly failed to come up, say so instead of pretending.
+            now = time.monotonic()
+            if getattr(self, "_start_first", None) is None:
+                self._start_first = now
+            if now - self._start_first > 30.0:
+                self.stat.set_text(
+                    "daemon still not running -- see `tts log` (journalctl)")
+            elif now - getattr(self, "_start_at", 0.0) > 3.0:
+                self._start_at = now
+                self.stat.set_text("daemon not running -- starting...")
                 GLib.spawn_async(["systemctl", "--user", "start", "tts"],
                                  flags=GLib.SpawnFlags.SEARCH_PATH)
             return True
-        self._starting = False
+        self._start_first = None
+        self._start_at = 0.0
         try:
             st = json.loads(raw)
         except ValueError:
@@ -425,7 +438,12 @@ class Panel(Gtk.Application):
         if al in ALIGNERS and self.aligner.get_selected() != ALIGNERS.index(al):
             self.aligner.set_selected(ALIGNERS.index(al))
 
-        if st.get("voices") and not self.catalogue:
+        # N18: the old gate required voices to be truthy, which is null while
+        # the model is unloaded -- so a panel opened before a model load never
+        # populated its voice list, even after the model came back. Fetch when
+        # the model is loaded and the list is empty; keep the last list while
+        # unloaded rather than blanking it.
+        if st.get("loaded") and not self.catalogue:
             raw = send("catalogue", timeout=10)
             try:
                 self.catalogue = json.loads(raw) if raw else []
