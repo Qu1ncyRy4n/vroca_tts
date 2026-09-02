@@ -210,6 +210,9 @@ class Reader:
         self.lock = threading.RLock()
         self.dump_lock = threading.Lock()
         self.wake = threading.Event()
+        self._engines_cache = None
+        self._engines_at = 0.0
+        self._last_pos_dump = 0.0
         self.mpv = Mpv(self._on_eof, self._on_pos)
         threading.Thread(target=self._prefetch_loop, daemon=True).start()
 
@@ -260,25 +263,30 @@ class Reader:
     def set_font_size(self, size):
         if size is None:
             return "font_size needs a number between 12 and 72"
-        self.font_size = max(12, min(72, int(size)))
-        save_prefs(self)
-        self._dump()
-        return f"font_size {self.font_size}"
+        # N15: the other setters hold the lock; these four did not, so a
+        # concurrent status() could read a half-updated snapshot.
+        with self.lock:
+            self.font_size = max(12, min(72, int(size)))
+            save_prefs(self)
+            self._dump()
+            return f"font_size {self.font_size}"
 
     def set_words_visible(self, count):
         if count is None:
             return "words_visible needs a number between 1 and 15"
-        self.words_visible = max(1, min(15, int(count)))
-        save_prefs(self)
-        self._dump()
-        return f"words_visible {self.words_visible}"
+        with self.lock:
+            self.words_visible = max(1, min(15, int(count)))
+            save_prefs(self)
+            self._dump()
+            return f"words_visible {self.words_visible}"
 
     def set_position(self, pos):
         if pos in ("bottom", "top", "center"):
-            self.position = pos
-            save_prefs(self)
-            self._dump()
-            return f"position {self.position}"
+            with self.lock:
+                self.position = pos
+                save_prefs(self)
+                self._dump()
+                return f"position {self.position}"
         return f"unknown position: {pos}"
 
     def reset_prefs(self):
@@ -367,12 +375,21 @@ class Reader:
             return f"engine {name}"
 
     def engines(self):
-        names = list(ENGINES)
-        if list_clone_refs():
-            names.append("zipvoice")
-        if RemoteEngine.available():
-            names.append("remote")
-        return names
+        # N16: this runs inside every _dump() -- previously on every mpv
+        # position tick, many times per second -- and each call did an
+        # os.listdir of the clone directory plus a key-file stat. The inputs
+        # change rarely (clips or env config added while running), so the
+        # scan is cached for a few seconds.
+        now = time.monotonic()
+        if self._engines_cache is None or now - self._engines_at > 2.0:
+            names = list(ENGINES)
+            if list_clone_refs():
+                names.append("zipvoice")
+            if RemoteEngine.available():
+                names.append("remote")
+            self._engines_cache = names
+            self._engines_at = now
+        return self._engines_cache
 
     def resolve_voice(self, token):
         """Catalogue sid for a voice named by id, display name, or index.
@@ -486,11 +503,12 @@ class Reader:
     def set_speed(self, speed):
         if speed is None:
             return f"speed needs a number between {SPEED_MIN} and {SPEED_MAX}"
-        self.speed = max(SPEED_MIN, min(SPEED_MAX, speed))
-        self.mpv.cmd("set_property", "speed", self.speed)
-        save_prefs(self)
-        self._dump()
-        return f"speed {self.speed:.2f}"
+        with self.lock:
+            self.speed = max(SPEED_MIN, min(SPEED_MAX, speed))
+            self.mpv.cmd("set_property", "speed", self.speed)
+            save_prefs(self)
+            self._dump()
+            return f"speed {self.speed:.2f}"
 
     def nudge(self, delta):
         return self.set_speed(self.speed + delta)
@@ -546,7 +564,15 @@ class Reader:
                 w = len(spans) - 1
         if w != self.word:
             self.word = w
-            self._dump()
+            # N16: position ticks arrive many times per second; the overlay
+            # polls the state file at 50 ms, so writing faster than that is
+            # invisible churn. Word changes are still written at the first
+            # tick that follows each 50 ms window, so no word is lost -- the
+            # next change re-dumps regardless.
+            now = time.monotonic()
+            if now - self._last_pos_dump >= 0.05:
+                self._last_pos_dump = now
+                self._dump()
 
     def _on_eof(self):
         with self.lock:
