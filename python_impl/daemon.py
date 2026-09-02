@@ -732,7 +732,17 @@ class Reader:
     def skip_queue(self):
         with self.lock:
             if self.queue:
-                self.queue.pop(0)
+                # D3: skip abandons the CURRENT item and advances to the next
+                # waiting one. The old behavior dropped the next waiting item
+                # while the current one kept playing, and stopped when nothing
+                # was waiting -- the opposite of the documented meaning.
+                self.sents, self.item_sid = self.queue.pop(0)
+                self.idx = 0
+                self.word = -1
+                self.cache.clear()
+                self.spans.clear()
+                self.render_ms.clear()
+                self._play()
                 return f"skipped item (queue length: {len(self.queue)})"
             return self.stop()
 
