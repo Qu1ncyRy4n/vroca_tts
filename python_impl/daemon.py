@@ -610,6 +610,9 @@ class Reader:
             self.item_sid = sid
             self.cache.clear()
             self.spans.clear()
+            # N17: render timings are per item. Carrying them across items
+            # mixes engines and documents into one average forever.
+            self.render_ms.clear()
             if not self.sents:
                 return "empty"
             self._play()
@@ -690,6 +693,7 @@ class Reader:
                 self.item_sid = sid
                 self.cache.clear()
                 self.spans.clear()
+                self.render_ms.clear()
                 self._play()
                 return f"playing {len(s)} sentences"
             else:
