@@ -1041,6 +1041,28 @@ def cycle_mode():
     return nxt
 
 
+def _socket_owner_live(path):
+    """True when a daemon is already serving on `path`.
+
+    D7: startup used to unlink the public socket unconditionally, so a
+    second daemon silently orphaned a healthy one -- both kept calling
+    accept() on different inodes, and only the newer start was reachable
+    through the name. A live owner is now refused at startup; a stale
+    socket (its peer died, so connect is refused) is still unlinked.
+    """
+    if not os.path.exists(path):
+        return False
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(0.5)
+    try:
+        s.connect(path)
+        return True
+    except OSError:
+        return False
+    finally:
+        s.close()
+
+
 def main():
     model_dirs = json.loads(os.environ["TTS_MODEL_DIRS"])
     threads = int(os.environ.get("TTS_THREADS", "4"))
@@ -1065,6 +1087,10 @@ def main():
     sid = prefs.get("voice")
     if isinstance(sid, int) and 0 <= sid < reader.voices():
         reader.sid = sid
+    if _socket_owner_live(SOCK):
+        print("tts.sock is already owned by a live daemon; refusing to start",
+              file=sys.stderr)
+        sys.exit(1)
     try:
         os.unlink(SOCK)
     except FileNotFoundError:
