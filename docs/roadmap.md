@@ -29,6 +29,21 @@ re-measure 904 voices.
 passing tests. It was not authored during the design session and has not been
 checked against the specification. See [`handoff.md`](handoff.md) §6.
 
+**The Python mismatch register was swept (2026-09-01).** Eighteen commits
+fixed the process-safety, input-safety, and semantics findings — D2, D3, D4,
+D7, N1–N7, N8–N10, N12, N14–N20, N2/D9/N3 — each CLI-tested against an
+isolated daemon. `vroca.md` no longer flags any row. The commits await
+`scripts/deploy.sh` to reach the live daemon. See [`handoff.md`](handoff.md)
+§3 for the per-finding table.
+
+**Track D is live in first config.** DeepInfra Qwen3-TTS through the existing
+`remote` engine: preset voices work (Ryan, Aiden, Vivian, Serena, …), quality
+rated clearly better than the local engines, ~3.7 s per sentence because the
+adapter is non-streaming. Streaming playback — the fix that reaches the
+model's ~97 ms figure — is Rust-slice-sized work. OpenRouter has no
+audio-speech endpoint; the local GPU (GTX 1080, no bf16) is the constraint on
+self-hosting.
+
 ---
 
 ## Track A — Python Improvements Before Rust
@@ -210,6 +225,14 @@ what it blocks.
 design and cloning. It cannot live inside the daemon: it is a ~2B parameter
 transformer wanting PyTorch or vLLM and a GPU, against a stack deliberately
 built on C++ onnxruntime with no Python ML stack.
+
+**First config live (2026-09-01).** `~/.config/tts/env` points the `remote`
+engine at DeepInfra's OpenAI-compatible endpoint with model
+`Qwen/Qwen3-TTS` (the CustomVoice variant; 9 preset voices, English-native:
+Ryan, Aiden). Verified end to end: `engine remote`, `voice Ryan`, speech.
+$20 per 1M characters; every character leaves the machine. VoiceDesign
+(`instruct`) and cloning (`voice_id`) need small adapter patches. Streaming
+is the real latency project.
 
 It belongs behind the existing HTTP engine boundary. See
 [`integration.md`](integration.md) for the wiring options and their real cost.

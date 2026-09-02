@@ -53,6 +53,45 @@ Python is the production system. Recently fixed and live:
 | A2 | One voice for the whole queue | Per-item voices via `--voice` |
 | A4 | Every `daemon.py` edit re-measured 904 voices | Engine code extracted to `engines.py` |
 
+### The 2026-09-01 bug sweep (committed, awaiting deploy)
+
+Eighteen commits fixed the process-safety, input-safety, and semantics
+findings of the mismatch register, each CLI-tested against an isolated
+daemon (short `XDG_RUNTIME_DIR`, `TTS_MPV_ARGS=--ao=null`):
+
+| Finding | Fix |
+|:---|:---|
+| N1 | mpv IPC socket is per-pid; no unconditional unlink, no cross-daemon player clobbering |
+| N5 | `sendall` for replies; the 101 KB catalogue arrives intact |
+| N6 | Requests read to a quiet gap with a 1 MiB cap; over-limit is an error, never truncation (~25 ms idle gap per command is the price) |
+| N7 | Verb/argument split; empty arguments answer usage errors; `speed 1 2` rejected |
+| N10 | Engine switch clears cache, spans, and render timings |
+| N17 | Render timings reset per item; `avg_render_ms` no longer mixes engines forever |
+| N12 | Eof while paused advances (staying paused) instead of stranding the queue |
+| D2 | `say` clears the waiting queue — documented behavior is now true |
+| D4 | `queue` while paused appends instead of replacing |
+| D3 | `skip` abandons the current item and advances |
+| N8, N9 | `reset` restores every preference including engine, clears cache and queue |
+| N15 | All setters hold the state lock |
+| N16 | Engine availability scan cached; position-driven dumps gated at 50 ms |
+| D7 | Startup refuses when a live daemon owns the socket; stale sockets still recoverable |
+| N4 | mpv death surfaces as `player_alive: false` plus a journal line; daemon keeps serving |
+| N2, D9, N3 | atexit cleanup removes sockets, snapshot, and tmpdir and terminates mpv; SIGTERM raises cleanly; `quit` cleans up |
+| N14 | Panel sends `mode_set`; daemon is the sole writer of `tts-mode` |
+| N18, N19, N20, D6 | Panel: catalogue fetch gated on load state, sliders span the daemon ranges, start retries every 3 s with a journal hint after 30 s |
+
+Already true before the sweep, verified rather than re-fixed: N11 and N13
+(`read` clears spans; eof clears `word`).
+
+Not fixed deliberately, still open: N21 (`position bottom` equals `center`
+in RSVP modes — a UX decision), N23 (client auto-start policy — §7.2),
+N24/N25 packaging questions (§7.13), D5 (shell client argument forwarding —
+lives in the deployment repo).
+
+Deploy note: these commits are **not** on the running daemon yet — the
+service needs `scripts/deploy.sh` (or the lock-plus-rebuild flow) to pick
+them up.
+
 ### Design complete
 
 `rust-spec.md` holds 17 binding decisions with justification, 27 findings each
@@ -181,11 +220,20 @@ Needs attention:
 
 1. **Review the Rust against the spec** (§6 above). Settle the scope question
    first — it changes what "done" means for the slice.
-2. **Run `scripts/multivoice_demo.py`.** The overlapping half is an experiment,
-   not a demo: whether the overlap is followable decides open question 10-a,
-   which is currently open on an assumption.
-3. **Continue Rust stage 3+** per [`roadmap.md`](roadmap.md) Track B.
-4. **Track C capabilities** — multi-voice channels, model residency, audio
+2. **Deploy the Python sweep**: `scripts/deploy.sh` (approval-sensitive) puts
+   the eighteen sweep commits on the live daemon. Verify with
+   `tts speed abc` (typed error), a second `tts-daemon` start (refusal), and
+   `quit` + socket check (clean exit).
+3. **Run `scripts/multivoice_demo.py`.** The overlapping half is an experiment,
+   not a demo: whether the overlap is followable decides open question 10-a.
+   User direction so far: overlap should be a per-caller choice (games and
+   simulations want it; GUI tools and notifications must not) — recorded in
+   `rust-spec.md` §10.
+4. **Track D is live in first config**: DeepInfra Qwen3-TTS through the
+   `remote` engine, preset voices, ~3.7 s/sentence non-streaming. Streaming
+   playback is the latency fix and is Rust-slice-sized. See
+   `roadmap.md` Track D.
+5. **Track C capabilities** — multi-voice channels, model residency, audio
    sinks, urgency, level control — are specified in `rust-spec.md` §10 with
    their open questions. None is Decided.
 

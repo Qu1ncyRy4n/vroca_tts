@@ -1734,6 +1734,15 @@ Overlapping speech is close to unintelligible, so interleaved is assumed to be
 the real requirement. **This assumption must be confirmed before it shapes
 code**, because it is the difference between one player and a mixer.
 
+> **User direction (2026-09-01).** Overlap is a **per-caller choice**, not a
+> global one: some programs want overlapping speech (games, simulations),
+> others must never overlap (GUI TTS tools, notifications). This answers the
+> either/or of 10-a — both modes exist, selected per caller — and leaves the
+> mechanics open: how a caller declares overlap (per-channel flag,
+> registration, or request parameter) is 10-b/10-o territory, and the
+> one-player-versus-mixer consequence still follows from how many callers
+> actually opt in.
+
 **Proposed model: channels.** Each client owns a named channel carrying its own
 voice binding and its own queue. A scheduler serializes channels onto the player.
 
@@ -2049,7 +2058,7 @@ Open points, none blocking:
 
 | # | Question | Blocks |
 | --- | --- | --- |
-| 10-a | Interleaved or genuinely overlapping playback? Decides one player versus a mixer. | R1 architecture |
+| 10-a | Interleaved or genuinely overlapping playback? Decides one player versus a mixer. **User direction 2026-09-01: both, chosen per caller** (games/simulations overlap; GUI tools/notifications never do). Remaining: how callers declare it. | R1 architecture |
 | 10-b | Channel identity: client-declared name, connection identity, or explicit registration? | Protocol, DEC-1 |
 | 10-c | Channel scheduling policy: priority, round-robin, or arrival order? | Scheduler |
 | 10-d | Do the `read` and `toggle` hotkeys act per-channel or globally? | DEC-13 |

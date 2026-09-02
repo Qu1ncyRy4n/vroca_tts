@@ -12,7 +12,7 @@
 
 1. **Markdown Text Normalizer:** Strips headings (`#`), bold/italic formatting, links, bullet points, and code blocks before sentence splitting so speech sounds like natural prose without symbol literal reads.
 2. **Center Fixation RSVP Scroll (`scroll_rsvp`):** Fixed central column alignment for the active word's ORP character while text streams past.
-3. **Speech Command Queueing:** `tts queue "text"`, `tts clear`, `tts skip` so background requests play sequentially without interrupting active audio tracks. While *paused*, `queue` currently replaces the active speech instead of appending (see D4 in [`rust-spec.md`](rust-spec.md)); the Rust decision makes it always append.
+3. **Speech Command Queueing:** `tts queue "text"`, `tts clear`, `tts skip` so background requests play sequentially without interrupting active audio tracks. `queue` always appends, including while paused (D4 fixed 2026-09-01).
 4. **Local Agent Input:** Local agents and scripts can submit speech through the `tts` CLI or UNIX socket. The socket is created with mode `0o666` inside the per-user runtime directory.
 5. **Session Persistence & Reset Defaults:** All overlay and engine preferences persist across reboots in `~/.config/tts/prefs.json` with a Reset Defaults button in `tts-panel`.
 6. **Dark Theme Selector:** High-contrast pitch black (`#121218`) background with white text (`#ffffff`) for voice picker dropdowns and listviews.

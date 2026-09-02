@@ -68,18 +68,14 @@ the reason.
 
 | Command | Effect |
 |:---|:---|
-| `say <text>` | Speak now, replacing current speech. `speak` is an alias. |
-| `queue <text>` | Append to the queue. |
+| `say <text>` | Speak now, replacing current speech *and* clearing the waiting queue. `speak` is an alias. |
+| `queue <text>` | Append to the queue. Always appends, including while paused. |
 | `read` | Speak the primary selection. **If already speaking, this stops instead.** |
 | `stop` | Stop playback. Waiting queue survives. |
 | `clear` | Stop playback *and* drop the waiting queue. |
-| `skip` | Drop the next waiting item. |
+| `skip` | Abandon the *current* item and advance to the next waiting one. |
 | `toggle` | Pause, or resume if paused. |
 | `next` / `back` | Move one sentence within the current item. |
-
-**Changing.** `say` will clear waiting items too; `queue` will always append even
-while paused; `skip` will abandon the *current* item. See `rust-spec.md`
-Decision 1. Today's behavior is as described above.
 
 Text is normalized before speaking: Markdown headings, emphasis, links, list
 markers and code fences are stripped so they are not read aloud literally.
@@ -197,6 +193,7 @@ exist, and `remote` only when the API environment is configured. Read the
 | Command | Argument |
 |:---|:---|
 | `mode` | cycles `subtitle` → `rsvp` → `scroll_rsvp` → `off` |
+| `mode_set <name>` | sets the mode directly: `subtitle`, `rsvp`, `scroll_rsvp`, `off` |
 | `position <pos>` | `bottom`, `top`, `center` |
 | `font_size <int>` | `12`–`72` |
 | `words_visible <int>` | `1`–`15` |
@@ -221,6 +218,7 @@ In `rsvp` and `scroll_rsvp`, `position bottom` currently renders the same as
 | `engine`, `voice`, `speed`, `aligner` | Current selections |
 | `engines` | Engines actually available right now |
 | `loaded` | Whether a model is resident |
+| `player_alive` | False once the player process has died; control operations keep working |
 | `last_render_ms`, `avg_render_ms` | Synthesis timing |
 
 The same object is written continuously to
@@ -261,13 +259,14 @@ working unchanged.
 
 ## 5. Limits And Gotchas
 
-**Request size.** The daemon reads a single 4096-byte chunk. Longer text is
-silently truncated, possibly mid-character. Split long input into several
-`queue` calls. **Changing:** an explicit limit with a real error.
+**Request size.** Requests are limited to 1 MiB; larger input is answered with
+`request too large` and nothing is acted on. A request ends after a short
+quiet gap (~25 ms) on the connection, so every command pays that idle gap on
+top of the round trip.
 
-**Empty text.** `say` with no argument is not a speak request — the trailing
-space is stripped and it returns `unknown: say`. Check for empty strings before
-sending.
+**Empty text.** `say` with no text returns `say needs text`. Same shape for
+`queue`, `voice`, `engine`, `aligner`, `position`, and `preview` with a
+missing argument.
 
 **`quit` stops the service.** It exits cleanly, so systemd does not restart it.
 Use `stop` to stop *speech*. Only use `quit` if you mean to shut the daemon down.

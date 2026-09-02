@@ -54,8 +54,10 @@ below happened in the first place.
 | Which behaviors still need migration fixtures? | [`legacy-compatibility.md`](legacy-compatibility.md). |
 
 This document does **not** describe the Python implementation. It describes the
-contract. Three rows below are marked where the current implementation does not
-honor it; the Rust decisions make the contract true rather than amending it.
+contract. Historically three rows were flagged where the implementation did not
+honor it (D2, D3, N8); the Python daemon was brought in line with the contract
+in the 2026-09-01 sweep, so no row is currently flagged. The Rust decisions
+keep the contract true rather than amending it.
 
 ---
 
@@ -70,12 +72,12 @@ bits on the socket grant nothing and are retained only for compatibility.
 
 | Command | Arguments | Description |
 |:---|:---|:---|
-| `say <text>` / `speak <text>` | String | Clears active queue and immediately speaks text. **Python leaves waiting queue items intact — see D2.** |
+| `say <text>` / `speak <text>` | String | Clears the active queue and immediately speaks text. |
 | `queue <text>` | String | Appends text block to the sequential speech queue. |
 | `read` | None | Reads current primary selection (or stops if currently reading). |
 | `stop` | None | Stops active speech and clears sentence cache. |
 | `clear` | None | Clears the speech queue and stops active audio. |
-| `skip` | None | Skips current queued item to advance to next in queue. **Python drops the next waiting item instead — see D3.** |
+| `skip` | None | Abandons the current queued item and advances to the next. |
 | `toggle` | None | Pauses or resumes playback in place (`Super+X`). |
 | `next` / `back` | None | Steps forward or backward by one sentence. |
 | `faster` / `slower` | None | Increases/decreases speed by `0.15x`. |
@@ -87,7 +89,8 @@ bits on the socket grant nothing and are retained only for compatibility.
 | `words_visible <int>` | `1` – `15` | Sets surrounding context words in `scroll_rsvp` mode. |
 | `position <pos>` | `bottom`, `top`, `center` | Sets overlay screen anchor. In `rsvp` and `scroll_rsvp`, `bottom` currently renders identically to `center`. |
 | `mode` | None | Cycles overlay mode (`subtitle` -> `rsvp` -> `scroll_rsvp` -> `off`). |
-| `reset` / `reset_prefs` | None | Resets all settings to factory defaults. **Python leaves `engine` unchanged — see N8.** |
+| `mode_set <name>` | `subtitle`, `rsvp`, `scroll_rsvp`, `off` | Sets overlay mode directly. Added when the panel stopped writing `tts-mode` itself (N14); the daemon is the file's only writer. |
+| `reset` / `reset_prefs` | None | Resets all settings to factory defaults, including engine, and clears rendered audio. |
 | `status` | None | Returns complete daemon state in JSON format. |
 | `catalogue` | None | Returns voice catalogue JSON for current engine. |
 | `preview <int>` | `sid` | Auditions a 1-sentence sample in voice `sid`. |
