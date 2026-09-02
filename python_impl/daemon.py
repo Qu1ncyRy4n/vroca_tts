@@ -11,9 +11,12 @@ mpv does the playing because pause/resume/speed on an already-decoded stream is
 exactly its job -- and its speed control is pitch-corrected, so faster/slower is
 instant instead of a re-synthesis round trip.
 """
+import atexit
 import json
 import os
 import re
+import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -137,6 +140,8 @@ class Mpv:
             except OSError:
                 threading.Event().wait(0.025)
         if self.sock is None:
+            # D9: a spawn that never serves IPC must not leak the child.
+            self.proc.terminate()
             raise RuntimeError("mpv IPC socket never appeared")
         threading.Thread(target=self._events, daemon=True).start()
         self.cmd("observe_property", 1, "time-pos")
@@ -1097,6 +1102,28 @@ def main():
     reader = Reader(None, model_dirs, threads, engine)
     reader.tts = build_engine(engine, model_dirs, threads,
                               reader._recognizer_or_none())
+
+    def _cleanup():
+        """Graceful-exit cleanup (N2, N3, D9).
+
+        The old exit paths left all of it behind: quit skipped unlink and
+        tmpdir removal, a crash left mpv alive, and the leaked snapshot was
+        indistinguishable from a live one."""
+        for path in (SOCK, reader.mpv.sock_path, STATE):
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+        shutil.rmtree(reader.tmp, ignore_errors=True)
+        if reader.mpv.proc.poll() is None:
+            reader.mpv.proc.terminate()
+
+    atexit.register(_cleanup)
+
+    def _on_sigterm(signum, frame):
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, _on_sigterm)
     reader.aligner = prefs.get("aligner", DEFAULT_ALIGNER)
     reader.speed = prefs.get("speed", 1.0)
     reader.font_size = prefs.get("font_size", DEFAULT_FONT_SIZE)
@@ -1173,7 +1200,11 @@ def main():
                 except OSError:
                     pass
                 reader.mpv.cmd("quit")
-                os._exit(0)
+                # N3: a clean SystemExit so the atexit cleanup runs. The exit
+                # code 0 still stops the user service by design -- documented
+                # in integration.md; whether `quit` should defeat the restart
+                # policy is an open question for the Rust daemon.
+                raise SystemExit(0)
             elif verb in ("say", "speak", "queue"):
                 # N7: the argument is parsed off the verb, so empty text is a
                 # usage error instead of stripping down to `say` and reporting
