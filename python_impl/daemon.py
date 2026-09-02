@@ -981,7 +981,7 @@ def main():
                 reply = reader.reset_prefs()
             elif cmd == "quit":
                 try:
-                    conn.send(b"bye")
+                    conn.sendall(b"bye")
                 except OSError:
                     pass
                 reader.mpv.cmd("quit")
@@ -1024,7 +1024,11 @@ def main():
             else:
                 reply = f"unknown: {cmd}"
             try:
-                conn.send(str(reply).encode())
+                # N5: the libritts catalogue response measures 101,359 bytes
+                # against roughly 106 KB of effective Unix-socket buffer. send()
+                # may write partially and its return value was discarded, which
+                # silently truncated the JSON. sendall loops until complete.
+                conn.sendall(str(reply).encode())
             except OSError:
                 pass
 
