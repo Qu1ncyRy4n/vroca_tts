@@ -10,7 +10,7 @@ Last updated 2026-08-07.
 ## Where We Are
 
 **Python is the working system.** Daemon, GTK overlay, control panel, five
-engines, deployed through `~/nix-dotfiles`.
+engines, deployed through `~/dev/nix-config`.
 
 **The Rust design phase is complete.** Seventeen decisions recorded with
 justification, a 27-entry mismatch register tying every finding to a line of
@@ -32,9 +32,9 @@ checked against the specification. See [`handoff.md`](handoff.md) §6.
 **The Python mismatch register was swept (2026-09-01).** Eighteen commits
 fixed the process-safety, input-safety, and semantics findings — D2, D3, D4,
 D7, N1–N7, N8–N10, N12, N14–N20, N2/D9/N3 — each CLI-tested against an
-isolated daemon. `vroca.md` no longer flags any row. The commits await
-`scripts/deploy.sh` to reach the live daemon. See [`handoff.md`](handoff.md)
-§3 for the per-finding table.
+isolated daemon. `vroca.md` no longer flags any row. Update the pinned Vroca
+input in `~/dev/nix-config` and rebuild to reach the live daemon. See
+[`handoff.md`](handoff.md) §3 for the per-finding table.
 
 **Track D is live in first config.** DeepInfra Qwen3-TTS through the existing
 `remote` engine: preset voices work (Ryan, Aiden, Vivian, Serena, …), quality
@@ -125,7 +125,7 @@ must not pretend it was instant.
 > derivation's inputs. This is not an optimization any more; it is a hard
 > dependency created by moving the code.
 
-`~/nix-dotfiles/home/tts.nix` builds `measureSrc` from `measure.py`,
+Vroca's `flake.nix` builds `measureSrc` from `measure.py`,
 `daemon.py`, and `voices.py`, because `measure.py` imported `daemon` for
 `build_engine`. Any daemon edit therefore invalidated the derivation and
 re-measured 904 libritts voices, about a minute of synthesis per rebuild.
@@ -160,20 +160,18 @@ costs nothing. Revisit if kokoro's voices are worth the seams.
 
 ---
 
-## Deploying While You Work
+## Releasing To NixOS
 
-`scripts/deploy.sh` rebuilds the system from the current working tree, so a
-change here reaches the running daemon without updating the deployment lock:
+Vroca's public flake exports the daemon, client, overlay, and panel. The
+deployment flake pins one reviewed GitHub revision, so CI and hosts evaluate
+the same source without machine-local paths or overrides.
 
-```sh
-./scripts/deploy.sh --dry     # evaluate only
-./scripts/deploy.sh           # rebuild and restart tts.service
-```
+1. Commit and push the Vroca change.
+2. In `~/dev/nix-config`, run `nix flake update vroca_tts`.
+3. Review and commit the `flake.lock` revision update.
+4. Rebuild the intended host through the normal NixOS workflow.
 
-It overrides the `vroca_tts` input for one invocation using `git+file:`, which
-respects `.gitignore`. The previous `path:` input copied 461 MB — almost all of
-it `rust_impl/target` — with a hash that changed on every `cargo build`, which is
-why the lock went stale constantly. See [`handoff.md`](handoff.md) §5.
+The last step changes the running system and must be explicitly approved.
 
 ---
 
@@ -192,7 +190,7 @@ Sequencing from `rust-spec.md` §9.3. Track A does not block any of it.
 | 7 | Remaining engines and alignment | |
 | 8 | Overlay and panel through the shared client | |
 | 9 | Parity tests and dogfooding, deployment unchanged | |
-| 10 | Update `~/nix-dotfiles` — separately approved | |
+| 10 | Update `~/dev/nix-config` — separately approved | |
 | 11 | Run Rust with a documented Python rollback | |
 | 12 | Retire Python — later, separate decision | |
 

@@ -29,11 +29,9 @@ Vroca is a text-to-speech and assistive reading framework. The current implement
 
 ## Deployment Boundary
 
-Deployment integration lives in `~/dev/nix-config`, which is a separate ownership and activation boundary. `modules/desktop/linux/apps/tts-home.nix` packages Vroca and defines the user services. `modules/desktop/linux/core/cosmic-home.nix` defines Vroca hotkeys. `flake.nix` owns the path input. Do not edit deployment, service activation, or host-level Nix configuration from this repo unless the user explicitly brings that repo and activation scope into the task.
+Deployment integration lives in `~/dev/nix-config`, which is a separate ownership and activation boundary. Vroca's `flake.nix` owns the packages; `modules/desktop/linux/apps/tts-home.nix` consumes them and defines the user services; `modules/desktop/linux/core/cosmic-home.nix` defines hotkeys. The deployment flake pins Vroca to a public GitHub revision in its lockfile. Do not edit deployment, service activation, or host-level Nix configuration from this repo unless the user explicitly brings that repo and activation scope into the task.
 
-`scripts/deploy.sh` rebuilds the system against the current working tree by overriding the `vroca_tts` flake input for one invocation, so the deployment lock never goes stale and never needs updating. It runs `sudo nixos-rebuild` and restarts the user service, so it is approval-sensitive: propose it, do not run it unprompted. It overrides with `git+file:` rather than `path:` because `path:` copies gitignored files, which meant 461 MB of `rust_impl/target` entering the store with a hash that changed on every `cargo build`.
-
-Committing in this repo does not change what is deployed. The lock pins a content hash, so a change reaches the running daemon only through `deploy.sh` or an explicit `nix flake update vroca_tts` followed by a rebuild. A rebuild may also leave the previous process running; check `MainPID` and restart explicitly.
+Committing here does not change what is deployed. Release Vroca by updating only its input with `nix flake update vroca_tts` in `~/dev/nix-config`, reviewing and committing the lockfile, then rebuilding the selected host. A rebuild may leave the previous process running; check `MainPID` and restart explicitly.
 
 ## Rust Migration
 
@@ -201,7 +199,7 @@ universal build, service, or shell permission.
 | Query daemon state | `tts status` | Read-only socket request. |
 | Change live playback or service state | `tts <mutation>`, `systemctl --user restart tts` | Describe the expected process and cleanup path first. Request approval for the exact action. |
 | Change deployment | patch files under `~/dev/nix-config` | Separate repository and activation boundary. Ask before writing or activating. |
-| Rebuild against the working tree | `scripts/deploy.sh` | Runs `sudo nixos-rebuild switch` and restarts `tts.service`. Propose it; do not run it unprompted. `--dry` evaluates and changes nothing. |
+| Update deployed Vroca | `nix flake update vroca_tts` in `~/dev/nix-config` | Changes the pinned source revision and `flake.lock`; inspect and commit it before a rebuild. |
 
 Run Rust commands through the approved Nix shell once the Rust toolchain exists:
 

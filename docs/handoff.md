@@ -14,7 +14,7 @@ drives `mpv`; a GTK overlay renders subtitles or RSVP; a control panel
 configures it; a shell client and Unix socket let hotkeys, scripts, and local
 agents submit speech. Five engines, all local except one HTTP adapter.
 
-Deployment lives in `~/nix-dotfiles`, a **separate repository and activation
+Deployment lives in `~/dev/nix-config`, a **separate repository and activation
 boundary**. Do not edit it without explicit approval.
 
 ---
@@ -53,7 +53,7 @@ Python is the production system. Recently fixed and live:
 | A2 | One voice for the whole queue | Per-item voices via `--voice` |
 | A4 | Every `daemon.py` edit re-measured 904 voices | Engine code extracted to `engines.py` |
 
-### The 2026-09-01 bug sweep (committed, awaiting deploy)
+### The 2026-09-01 bug sweep (published, awaiting deployment)
 
 Eighteen commits fixed the process-safety, input-safety, and semantics
 findings of the mismatch register, each CLI-tested against an isolated
@@ -88,9 +88,9 @@ in RSVP modes — a UX decision), N23 (client auto-start policy — §7.2),
 N24/N25 packaging questions (§7.13), D5 (shell client argument forwarding —
 lives in the deployment repo).
 
-Deploy note: these commits are **not** on the running daemon yet — the
-service needs `scripts/deploy.sh` (or the lock-plus-rebuild flow) to pick
-them up.
+Deploy note: these commits are **not** on the running daemon yet. Update the
+`vroca_tts` input in `~/dev/nix-config`, review and commit its lockfile, then
+rebuild the host to deploy them.
 
 ### Design complete
 
@@ -117,7 +117,7 @@ reviewed against the spec.
 3. **Cite identifiers.** `D#` and `N#` are findings; `DEC-#` are decisions.
    `D9` and `DEC-9` are different things. Commits and tests should cite them so
    a behavior change traces to the evidence that motivated it.
-4. **`~/nix-dotfiles` needs explicit approval.** Every time.
+4. **`~/dev/nix-config` needs explicit approval.** Every time.
 5. **Measure before asserting.** Most of the useful findings here came from
    measuring rather than reasoning — the 101,359-byte catalogue against a
    106 KB buffer, kokoro at 3300 ms versus libritts at 139 ms, the aligner that
@@ -151,30 +151,16 @@ Unix socket paths cap at 108 bytes — a long temp path fails with a confusing
 
 Each of these cost real time. They are not hypothetical.
 
-**The deployment lock is a snapshot.** `~/nix-dotfiles/flake.lock` pins
-`vroca_tts` by content hash, so committing here changes nothing until
-`nix flake update vroca_tts` — note the **underscore**. And a rebuild may leave
-the old process running; check `MainPID` and restart explicitly.
+**The deployment lock is a snapshot.** `~/dev/nix-config/flake.lock` pins the
+public `vroca_tts` GitHub revision. Committing here changes nothing until
+`nix flake update vroca_tts` runs in the deployment repo and its lockfile is
+reviewed and committed. A rebuild may leave the old process running; check
+`MainPID` and restart explicitly.
 
-Use `scripts/deploy.sh` instead while iterating. It overrides the input for one
-invocation, so the lock never goes stale and never needs updating:
-
-```sh
-./scripts/deploy.sh --dry     # evaluate only
-./scripts/deploy.sh           # rebuild and restart the service
-```
-
-**`path:` copies gitignored files; `git+file:` does not.** The deployment input
-was `path:`, which has no git awareness and copied the whole directory into the
-store — 461 MB, almost all of it `rust_impl/target`, with a hash that changed on
-every `cargo build`. That is why the lock went stale constantly once Rust work
-started. `git+file:` respects `.gitignore` and copies 540 KB. Measured, not
-estimated. `deploy.sh` uses `git+file:` for exactly this reason.
-
-**`measureSrc` and `engines.py` are coupled.** `~/nix-dotfiles/home/tts.nix`
-copies specific files for the pitch-table derivation. If `measure.py` gains an
-import that is not copied, the build fails with `ModuleNotFoundError`. This
-already happened once.
+**Vroca owns its package derivations.** `nix-config` consumes the flake's
+exported daemon, client, overlay, and panel packages. Keep model fetches,
+Python environments, and package wrappers in Vroca; integration owns only the
+service units and desktop hotkeys.
 
 **`catalogue` is over 100 KB.** 101,359 bytes for libritts against roughly
 106 KB of effective socket buffer. Read to EOF; a single `recv()` truncates.
@@ -220,8 +206,9 @@ Needs attention:
 
 1. **Review the Rust against the spec** (§6 above). Settle the scope question
    first — it changes what "done" means for the slice.
-2. **Deploy the Python sweep**: `scripts/deploy.sh` (approval-sensitive) puts
-   the eighteen sweep commits on the live daemon. Verify with
+2. **Deploy the Python sweep**: update `vroca_tts` in `~/dev/nix-config`,
+review and commit `flake.lock`, then rebuild the target host (each step is
+approval-sensitive). Verify with
    `tts speed abc` (typed error), a second `tts-daemon` start (refusal), and
    `quit` + socket check (clean exit).
 3. **Run `scripts/multivoice_demo.py`.** The overlapping half is an experiment,

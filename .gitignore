@@ -21,3 +21,11 @@ target
 #.idea/
 
 **/__pycache__
+
+# Credentials belong in user-managed files outside the repository.
+.env
+.env.*
+*.key
+*.pem
+*.p12
+*.pfx

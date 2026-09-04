@@ -114,7 +114,7 @@ hotkeys and local programs
 
 | Executable | Source | Defined in |
 | --- | --- | --- |
-| `tts` | `writeShellApplication` wrapping `socat` | `~/nix-dotfiles/home/tts.nix` |
+| `tts` | `writeShellApplication` wrapping `socat` | Vroca `flake.nix` packages |
 | `tts-daemon` | `python_impl/daemon.py` | same |
 | `tts-panel` | `python_impl/panel.py` | same |
 | `tts-overlay` | `python_impl/overlay.py` | same |
@@ -156,7 +156,7 @@ All are static Nix store paths. Nothing is downloaded at runtime.
 
 ### 3.5 Hotkeys
 
-Defined in `~/nix-dotfiles/home/cosmic.nix`.
+Defined in `~/dev/nix-config/modules/desktop/linux/core/cosmic-home.nix`.
 
 | Binding | Command |
 | --- | --- |
@@ -1087,7 +1087,7 @@ are one key with two meanings.
 
 - *Explicit operations only.* Rejected: it does not remove the toggle, it
   relocates it. Either the CLI grows the same conditional logic, or the hotkey
-  definitions in `~/nix-dotfiles` change — and that is a separate ownership and
+  definitions in `~/dev/nix-config` change — and that is a separate ownership and
   approval boundary.
 
 **Decision.** `read` and `toggle` keep their exact current behavior as
@@ -1529,7 +1529,7 @@ The first Rust change is bounded. It MUST contain only:
 6. Fixtures derived from [`legacy-compatibility.md`](legacy-compatibility.md).
 
 It MUST NOT contain: sockets, `mpv`, audio, GTK, `sherpa-onnx`, systemd
-integration, or any change under `~/nix-dotfiles`.
+integration, or any change under `~/dev/nix-config`.
 
 **Prerequisite.** `flake.nix` must gain a Rust toolchain (N26). That is itself a
 reviewed change requiring `nix develop` approval and a lockfile refresh.
@@ -1567,7 +1567,7 @@ Rust MAY replace Python in deployment only when all of the following hold.
 5. The overlay and panel work on the target Linux desktop.
 6. Dogfooding confirms normal reading, queueing, seeking, speed, voices, modes,
    and hotkeys.
-7. Nix builds and service integration are reviewed in `~/nix-dotfiles` as a
+7. Nix builds and service integration are reviewed in `~/dev/nix-config` as a
    separately approved change.
 8. Switching back to Python remains documented and tested.
 
@@ -1583,7 +1583,7 @@ Rust MAY replace Python in deployment only when all of the following hold.
 7. Remaining approved local engines and alignment.
 8. Overlay and panel through the shared client.
 9. Parity tests and dogfooding without changing default deployment.
-10. Update `~/nix-dotfiles` in a separately approved deployment change.
+10. Update `~/dev/nix-config` in a separately approved deployment change.
 11. Observe the Rust service with a documented Python rollback.
 12. Retire Python in a later, separate decision.
 
@@ -1936,7 +1936,7 @@ cost of §10.3.
 
 **2. It does not fit inside the current daemon.** The existing stack is
 deliberately `sherpa-onnx` — C++ and onnxruntime, int8, CPU, and explicitly no
-Python ML stack, as `~/nix-dotfiles/home/tts.nix` records. Qwen3-TTS is a ~2B
+Python ML stack, as Vroca's `flake.nix` records. Qwen3-TTS is a ~2B
 parameter transformer wanting PyTorch or vLLM and GPU. Embedding it would
 replace the stack's central premise.
 

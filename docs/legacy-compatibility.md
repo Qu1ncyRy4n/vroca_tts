@@ -87,8 +87,9 @@ Finding identifiers (`D#`, `N#`) refer to the mismatch register in
 
 ## Client Surface Baseline
 
-The deployed shell client lives in `~/nix-dotfiles/home/tts.nix` and is a
-separate ownership boundary. These are its observed behaviors.
+The deployed shell client is Vroca's flake package, integrated by
+`~/dev/nix-config/modules/desktop/linux/apps/tts-home.nix`. The integration is
+a separate ownership boundary. These are its observed behaviors.
 
 | Behavior | Python client | Rust target | Finding |
 | --- | --- | --- | --- |
