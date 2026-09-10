@@ -204,6 +204,12 @@ GTK.
 Recorded in `rust-spec.md` §10. None is Decided; each has open questions naming
 what it blocks.
 
+[`conversational-audio-recommendation.md`](conversational-audio-recommendation.md)
+recommends the next design decisions: channel-scoped queues, categorical
+preemption, resumption, caller-owned audio sinks, and opt-in voice overlap.
+It is intentionally non-normative until those choices are incorporated into
+`rust-spec.md`.
+
 | | Capability | Blocking question |
 |:---|:---|:---|
 | R1 | Multiple voices, channels, scheduling | Interleaved or genuinely overlapping? |

@@ -31,6 +31,7 @@ fixed.
 | What must Rust build? | [`rust-spec.md`](rust-spec.md) — normative, owns every decision |
 | What still needs migration fixtures? | [`legacy-compatibility.md`](legacy-compatibility.md) |
 | How do I *call* Vroca from another program? | [`integration.md`](integration.md) |
+| How should conversational interruption, channels, and voice overlap work? | [`conversational-audio-recommendation.md`](conversational-audio-recommendation.md) — recommendation pending specification decisions |
 | What order does work happen in? | [`roadmap.md`](roadmap.md) |
 
 `vroca.md` deliberately does **not** describe the implementation. Three rows in
