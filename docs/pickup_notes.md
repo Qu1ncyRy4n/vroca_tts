@@ -2,7 +2,7 @@
 
 ## Current State
 
-* **Location:** `~/dev/omnicortex/vroca_tts`
+* **Location:** `~/dev/exocortex/vroca_tts`
 * **Active Python Stack:** `python_impl/` containing `daemon.py`, `overlay.py`, `panel.py`, `measure.py`, `voices.py`.
 * **Rust Placeholder:** `rust_impl/` is reserved for a staged Rust replacement. Python remains usable until the Rust parity gate passes.
 
