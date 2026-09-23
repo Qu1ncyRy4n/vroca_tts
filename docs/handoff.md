@@ -32,6 +32,7 @@ fixed.
 | What still needs migration fixtures? | [`legacy-compatibility.md`](legacy-compatibility.md) |
 | How do I *call* Vroca from another program? | [`integration.md`](integration.md) |
 | How should conversational interruption, channels, and voice overlap work? | [`conversational-audio-recommendation.md`](conversational-audio-recommendation.md) — recommendation pending specification decisions |
+| What is the bounded macOS compatibility path? | [`macos-compatibility.md`](macos-compatibility.md) — Apple Silicon daemon and client plan |
 | What order does work happen in? | [`roadmap.md`](roadmap.md) |
 
 `vroca.md` deliberately does **not** describe the implementation. Three rows in

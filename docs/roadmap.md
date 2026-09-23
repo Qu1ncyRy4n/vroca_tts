@@ -247,6 +247,22 @@ endpoint is the practical path on this hardware.
 
 ---
 
+## Track E — macOS Daemon And Client
+
+**Planned, not deployed.** [`macos-compatibility.md`](macos-compatibility.md)
+defines an Apple Silicon daemon-and-client slice. The package remains owned by
+this flake; a Home Manager LaunchAgent belongs in the separately owned
+`~/dev/nix-config` only after approval. The first slice excludes the Linux GTK
+overlay/panel and global hotkeys.
+
+The immediate work is to make `tts` portable by removing its unconditional
+`systemd` dependency on Darwin, establish one shared Darwin runtime-directory
+policy, and validate the daemon and client on physical Apple Silicon hardware.
+The `quit` lifecycle and Darwin logging behavior require explicit decisions
+before the LaunchAgent is declared.
+
+---
+
 ## Suggested Order
 
 1. ~~Change `measureSrc`, update the lock, rebuild.~~ **Done and verified live:**
