@@ -70,7 +70,7 @@ the reason.
 |:---|:---|
 | `say <text>` | Speak now, replacing current speech *and* clearing the waiting queue. `speak` is an alias. |
 | `queue <text>` | Append to the queue. Always appends, including while paused. |
-| `read` | Speak the primary selection. **If already speaking, this stops instead.** |
+| `read` | Speak the primary selection, falling back to the regular clipboard. **If already speaking, this stops instead.** |
 | `stop` | Stop playback. Waiting queue survives. |
 | `clear` | Stop playback *and* drop the waiting queue. |
 | `skip` | Abandon the *current* item and advance to the next waiting one. |

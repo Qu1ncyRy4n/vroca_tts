@@ -888,11 +888,16 @@ def _split_voice(text):
 
 def selection():
     if sys.platform == "darwin":
-        cmds = [["pbpaste"]]
+        primary_cmds = [["pbpaste"]]
+        clipboard_cmds = []
     else:
-        cmds = [["wl-paste", "--primary", "--no-newline"],
-                ["xclip", "-selection", "primary", "-o"]]
-    for c in cmds:
+        primary_cmds = [["wl-paste", "--primary", "--no-newline"],
+                        ["xclip", "-selection", "primary", "-o"]]
+        clipboard_cmds = [["wl-paste", "--no-newline"],
+                          ["xclip", "-selection", "clipboard", "-o"]]
+    # Most editors publish highlighting to PRIMARY. Copy-only applications such
+    # as terminal TUIs and Zotero publish only to CLIPBOARD.
+    for c in primary_cmds + clipboard_cmds:
         try:
             r = subprocess.run(c, capture_output=True, text=True, timeout=2)
             if r.returncode == 0 and r.stdout.strip():

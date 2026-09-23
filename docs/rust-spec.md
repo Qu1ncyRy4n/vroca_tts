@@ -1079,9 +1079,9 @@ missing entry.
 
 **Status:** Decided.
 
-**Current behavior.** `read` reads the primary selection, but stops instead if
-speech is active (`daemon.py:990-991`). `toggle` flips pause and resume. Both
-are one key with two meanings.
+**Current behavior.** `read` reads the primary selection, falling back to the
+regular clipboard, but stops instead if speech is active (`daemon.py:1175-1176`).
+`toggle` flips pause and resume. Both are one key with two meanings.
 
 **Alternatives considered.**
 
@@ -1123,12 +1123,14 @@ subsequent action are separate lock acquisitions.
 operations.
 
 **Privacy and trust boundary.** `ReadSelection` reads the X or Wayland primary
-selection, which may contain anything currently selected — including passwords.
-This is an existing, deliberate capability, and it MUST NOT be logged.
+selection, falling back to the regular clipboard. Either may contain anything
+selected or copied — including passwords. This is an existing, deliberate
+capability, and it MUST NOT be logged.
 
-**Test evidence required.** `read` while idle reads the selection; `read` while
-active stops; `toggle` in both directions; the explicit four operations tested
-independently; atomicity under a concurrent state change.
+**Test evidence required.** `read` while idle prefers the primary selection and
+falls back to the regular clipboard; `read` while active stops; `toggle` in both
+directions; the explicit four operations tested independently; atomicity under a
+concurrent state change.
 
 ---
 

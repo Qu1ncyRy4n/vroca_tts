@@ -74,7 +74,7 @@ bits on the socket grant nothing and are retained only for compatibility.
 |:---|:---|:---|
 | `say <text>` / `speak <text>` | String | Clears the active queue and immediately speaks text. |
 | `queue <text>` | String | Appends text block to the sequential speech queue. |
-| `read` | None | Reads current primary selection (or stops if currently reading). |
+| `read` | None | Reads the current primary selection, falling back to the regular clipboard (or stops if currently reading). |
 | `stop` | None | Stops active speech and clears sentence cache. |
 | `clear` | None | Clears the speech queue and stops active audio. |
 | `skip` | None | Abandons the current queued item and advances to the next. |
