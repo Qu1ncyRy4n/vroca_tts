@@ -1,234 +1,138 @@
-# Identity
+# Intro
 
-## Role
+## Assistant Agent
 
-You are a software engineering assistant working on vroca_tts. Learn the
-repository's local conventions before changing behavior.
+You are an Assistant agent to a developer.
 
-## Project Overview
+## Author Ownership, No Agent Signatures
 
-Vroca is a text-to-speech and assistive reading framework. The current implementation is the Python daemon, GTK overlay, control panel, voice tooling, and Nix development shell. `rust_impl/` is present for the Rust daemon, CLI, and GUI replacement, but the Python implementation remains the behavior source until the Rust path reaches parity and the migration decision is recorded.
+The developer owns official authorship. Agents do not add commit trailers,
+signatures, or authorship claims unless the developer explicitly requests one.
+This applies to commits and generated attribution, not ordinary factual
+documentation of who made a decision. Documentation of decision-making should be
+a generic agent label such as `agent-assistant` or with a repo specific id/enumeration. Do not log the model or company that developed or is serving the model unless requested.
 
-## Design Of Record
+## Flag AGENTS.md Or Other Conflicts
 
-`docs/vroca.md` is the design of record for architecture and public surfaces. It states the public contract, not what the Python code currently does. Before changing behavior, compare that document with the Python implementation and call out drift instead of assuming the docs are current.
+Flag an instruction problem when it materially blocks, contradicts, or makes the
+requested work unsafe. State the conflicting sources, the practical effect, and
+a proposed resolution.
 
-`docs/rust-spec.md` is the normative specification for the Rust implementation. It owns every migration decision, records the Python-versus-contract mismatch register with stable `D` and `N` identifiers, and lists the remaining open questions. Consult it before making any Rust design choice; do not resolve an item it marks Open by picking whatever looks conventional.
+If the dev/user is steering a workflow process in a direction that is not aligned with
+`AGENTS.md`, flag it to the user, and recommend a change in workflow policy or better alignment with predefined workflow.
 
-`docs/legacy-compatibility.md` is the parity checklist and states the fixtures each legacy command needs before it may be called compatible.
+# Workflow / Process
 
-`docs/integration.md` is the guide for programs that call Vroca rather than implement it. Point external callers there. Keep it accurate when the socket surface, error strings, or limits change.
+## Principled Code And Tool Use
 
-`docs/handoff.md` is the entry point for a new contributor: document map, traps, and next steps. Start there.
+We will write with consistent and centralized principles / patterns for code
+(see guide per language, tools etc) and tool use.
 
-`docs/roadmap.md` is the sequencing plan: what is done, what is next, and what is still being designed.
+When developing in a language or calling a tool, use its relevant skill and/or
+read its relevant guide entry.
 
-`docs/pickup_notes.md` is a working handoff and roadmap. `README.md` is a short orientation.
+If a relevant skill or guide does not exist, use sound defaults for the current
+task and propose a bounded module only after repeated need is demonstrated.
 
-# Vroca Boundaries
+## Developer Decision Involvement Level
 
-## Deployment Boundary
+Define the decision involvement level as the lowest level at which the developer
+wants to approve choices. Offer three defaults: `outcome` (mission, intent,
+behavior), `interface` (architecture, API/CLI shape, data model), and
+`implementation` (functions, control flow, names). Ask only for unresolved
+choices at or above that level; surface lower-level choices only when they
+materially affect the agreed outcome, safety, or scope.
 
-Deployment integration lives in `~/dev/nix-config`, which is a separate ownership and activation boundary. Vroca's `flake.nix` owns the packages; `modules/desktop/linux/apps/tts-home.nix` consumes them and defines the user services; `modules/desktop/linux/core/cosmic-home.nix` defines hotkeys. The deployment flake pins Vroca to a public GitHub revision in its lockfile. Do not edit deployment, service activation, or host-level Nix configuration from this repo unless the user explicitly brings that repo and activation scope into the task.
+## Decision First
 
-Committing here does not change what is deployed. Release Vroca by updating only its input with `nix flake update vroca_tts` in `~/dev/nix-config`, reviewing and committing the lockfile, then rebuilding the selected host. A rebuild may leave the previous process running; check `MainPID` and restart explicitly.
+### Plan Ahead
 
-## Rust Migration
+Use fine-grained, specific implementation plans. Work with the user on
+broad-strokes timelines and to-do (TODO) lists. By default, make a
+semi-thorough project timeline that stays flexible for future details. A user
+may request a deep and exhaustive timeline. Identify decisions at or above the
+selected decision involvement level before implementation.
 
-Preserve the documented socket protocol, preference format, runtime state format, executable names, and systemd behavior during the Rust migration unless the change is already approved in `docs/rust-spec.md`. That specification is the record of approved compatibility changes; several are approved, so treat it, not this instruction, as the current answer. Anything it does not cover still needs explicit approval. Test both success and malformed-input paths.
+## Staged Interface Development
 
-The migration is a **staged replacement**, recorded in `docs/vroca.md` and specified in `docs/rust-spec.md`. Python remains the usable path until Rust passes the reviewed parity gate in `docs/rust-spec.md` §9.2. The first Rust slice is bounded by §8 of that document; do not exceed it without a new decision.
+The general workflow will be staged: After design decisions are made on higher
+levels, implementation will proceed in stages per set of changes, starting from
+API -> CLI -> GUI -> etc.
 
-## Service Lifecycle
+1. API: api designed -> api implementation -> unit tests -> feedback and adjustment
+2. CLI: cli designed -> cli implementation -> usage tests -> feedback and adjustment
 
-Be careful with live-service behavior. Before changing daemon startup, shutdown, socket ownership, stale socket recovery, malformed command handling, systemd restart behavior, child `mpv` cleanup, or client/daemon compatibility, inspect the code path and describe the lifecycle consequence.
+Depending on additional control surfaces, and if they're implemented:
 
-The daemon should become the sole owner of runtime state during the Rust migration. The overlay renders state. The panel is otherwise a client. Keep that ownership boundary clear unless the task is specifically to redesign it.
+- GUI: gui designed -> gui implementation -> (human) usage tests -> feedback and adjustment
+- Network usage: api calls over network implemented -> network tests -> feedback and adjustment
 
-# Workflow
+For work that changes an interface or control surface, define bounded, observable behavior. It should be visible through
+CLI output, tests, inspection, or a quantitative metric; avoid features that operate without an inspectable result.
+Prefer explicit read APIs and state changes over hidden mutation where practical.
+
+Apply API -> CLI -> GUI -> network stages only when that surface is changed.
+For API work, show the proposed interface and expected behavior before
+implementation. For CLI work, show usage and expected output. For GUI or other
+human-operated work, give the developer a short path to explore the change and
+say what should happen. Do not invent stages that the current work does not
+have.
+
+## Use An Explicit Git Commit Mode
+
+Use one commit mode for each task:
+
+- **Commit only when asked:** prepare, validate, and report the change, but do
+  not create a commit until the developer asks.
+- **Goal -> atomic commits:** when the developer explicitly authorizes a goal,
+  make focused commits as independently valid milestones toward it. Each commit
+  must contain one coherent change and its relevant validation.
+
+Default to commit only when asked. Before the first commit, state the selected
+mode if it is not already clear from the task. In either mode, preserve
+unrelated work, stage explicitly, and do not push, open a pull request, force an
+operation, or make another external Git change unless the developer asks.
+
+# Constraints and Safety
 
 ## Focused Change Loop
 
-1. Understand the request and inspect the affected area.
-2. Keep the change limited to the requested behavior.
-3. Preserve user changes already present in the working tree.
-4. Validate the affected area and inspect the final diff.
-5. Report the changed files and checks run.
+The focused change loop is: inspect the relevant code and instructions, make the
+smallest complete change, run the narrowest meaningful validation, inspect the
+diff, and report remaining risk. Before adding a new abstraction or
+implementation, check existing local code, dependencies, and documented tools.
 
-## Documentation
+## Unknown Work Caution
 
-Keep design records, implementation, and public documentation consistent. Do
-not rewrite unrelated prose for style. Preserve explanatory comments unless the
-same change replaces them with a clearer explanation near the same logic.
+Treat existing uncommitted work as developer- or agent-owned unless the task
+clearly includes it. Do not expand a requested change into cleanup, redesign,
+formatting, or migration without approval.
 
-## Lightweight Escalation
+Run the narrowest meaningful validation, and state exactly what ran and what did
+not. Do not claim success when validation was skipped, blocked, or inconclusive.
 
-Use the focused change loop for routine fixes, small documentation edits, and
-local improvements. Pause and ask before making a durable choice when the work
-changes architecture, a public or wire format, persistent data, a security
-boundary, an irreversible operation, a public specification, or another
-repository's ownership boundary.
+## Don't Reinvent The Wheel, Consult Docs First
 
-Recommend a wider check when the scope, result, or risk looks uncertain.
+Read local documentation and existing implementation before inventing an
+interface, workflow, or abstraction.
 
-## Diff Discipline
+Do not reinvent the wheel. Consult docs. Ask the user. Reference the source-code. Reference `docs/research`.
+If all else fails, do web search research, and append the results to any relevant
+research document.
 
-Keep changes directly tied to the user's request or a locked decision. Do not
-rewrite files from scratch, arbitrarily rewrap lines, reorder unrelated
-sections, or normalize prose style unless that cleanup is the requested change.
+## Keep Costly Or Irreversible Actions Approval Only, Visible, And Trackable
 
-## User Edits
+Ask before network writes, account changes, paid actions, data deletion, force
+operations, or publishing. Use conventional editing commands for making code
+changes. Do not use bash appending / pipe editing commands so that code changes
+are visible and trackable.
 
-When user edits appear during a task, preserve them. Do not revert, overwrite,
-stage, unstage, commit, or clean up user edits unless the user explicitly asks.
-If those edits conflict with the current task, stop and ask how to proceed.
+Use `/tmp/...` for experimentation and temporary files.
 
-## Public Surfaces
+## Security
 
-Search for and call out changes to integration surfaces: public APIs, protocol
-or wire formats, CLI arguments, config loading, persisted data, resuming
-existing state, and user-visible output.
-
-# Stack
-
-## Python Nix Dependencies
-
-When Python dependencies are provided by a Nix flake or shell, enter the
-documented `nix develop` environment before debugging imports or tool paths.
-Treat `flake.nix` and Python project metadata as separate dependency surfaces:
-do not update one to paper over drift in the other without explaining which
-environment is authoritative for the repo.
-
-## Python Validation
-
-Use focused checks such as `python -m py_compile <file>`, `uv run ...`,
-`pytest`, or a documented smoke command. For data-affecting changes, validate on
-a fixture, temporary copy, or safe subset before touching authoritative data.
-
-## Nix Develop
-
-Prefer `nix develop` or the repository's documented development shell before
-debugging missing tools. Do not assume the ambient shell represents the intended
-toolchain.
-
-## Nix Flakes
-
-When the repository uses flakes, inspect `flake.nix`, `flake.lock`, and the
-affected module path before editing. Do not update `flake.lock` unless the task
-includes dependency updates or the check/build requires a lock refresh. Summarize
-lockfile changes when they happen.
-
-## Rust Development
-
-Run `cargo fmt`, `cargo check`, and focused `cargo test` unless the repository
-wraps these with `just`, `make`, or another documented command. Use the wrapper
-when it encodes repository policy.
-
-## Rust API Shape
-
-Prefer typed structures and enums for domain concepts instead of strings spread
-through command handling. Avoid boolean or ambiguous `Option` parameters that
-make call sites hard to read; prefer enums, named methods, newtypes, or builder
-style when that clarifies intent.
-
-## Rust Dependencies
-
-Do not introduce a database, async runtime, GUI framework, or broad dependency
-unless the change clearly needs it. If dependency files change, run the
-repository's lockfile refresh command and include the generated updates.
-
-## Rust Tests
-
-Keep tests deterministic. Prefer whole-object equality when it makes failures
-clear. Avoid tests for static constants or negative tests for behavior that was
-removed.
-
-# Constraints
-
-## Runtime Artifacts
-
-Do not commit generated binaries, build output, local state, caches, audit logs,
-database files, embeddings, coverage output, or other runtime artifacts. Extend
-ignore rules when a new generated or sensitive path appears.
-
-## Temporary Paths
-
-Put temporary files, tool caches, build caches, and disposable test data under
-`/tmp` or another repo-approved temporary root. Configure tools with
-explicit cache paths when they would otherwise write into the repository.
-
-## Shell Errors
-
-Never hide a command failure with `|| true`. Use explicit branching when a
-non-fatal command may fail, and record the exit status or relevant diagnostics
-instead of dropping the result.
-
-# Validation
-
-## Vroca Commands
-
-Use the Nix dev shell when checking repo behavior:
-
-```sh
-nix develop
-```
-
-Retain `flake.lock` when Nix creates or updates it, and report the lockfile
-change in the handoff.
-
-For Python syntax checks, use:
-
-```sh
-python -m py_compile python_impl/daemon.py python_impl/overlay.py python_impl/panel.py python_impl/measure.py python_impl/voices.py
-```
-
-For behavior touching socket commands, prefs, state, overlay, `mpv`, or future systemd service behavior, prefer a small manual smoke test and report the exact daemon, panel, overlay, and client commands used. Do not run live audio or service activation steps without making the expected process and cleanup path clear.
-
-## Approval-Sensitive Commands
-
-When sandboxing rejects a command that is necessary for the task, request
-approval for the exact command family and state its target. Do not ask for a
-universal build, service, or shell permission.
-
-| Need | Command family | Notes |
-| --- | --- | --- |
-| Enter the project environment | `nix develop` | May contact the local Nix daemon and fetch cached dependencies. |
-| Evaluate the flake | `nix flake check --no-build`, `nix flake metadata --json`, `nix eval` | Read-only evaluation. |
-| Build a known output | `nix build --no-link <exact-attribute>` | Show the exact attribute first. Do not request a broad build rule. |
-| Inspect the live service | `systemctl --user show tts.service`, `journalctl --user -u tts.service` | Read-only. |
-| Query daemon state | `tts status` | Read-only socket request. |
-| Change live playback or service state | `tts <mutation>`, `systemctl --user restart tts` | Describe the expected process and cleanup path first. Request approval for the exact action. |
-| Change deployment | patch files under `~/dev/nix-config` | Separate repository and activation boundary. Ask before writing or activating. |
-| Update deployed Vroca | `nix flake update vroca_tts` in `~/dev/nix-config` | Changes the pinned source revision and `flake.lock`; inspect and commit it before a rebuild. |
-
-Run Rust commands through the approved Nix shell once the Rust toolchain exists:
-
-```sh
-nix develop --command cargo fmt --check
-nix develop --command cargo check
-nix develop --command cargo test
-```
-
-## Risk Scaled Checks
-
-Scale validation to risk. Use focused checks for narrow changes and broader
-suites when shared behavior, public interfaces, persistence, or user-facing
-workflows change.
-
-# Communication
-
-## TTS Friendly Chat
-
-When writing chat output for speech, lead with the result or next action, then
-give the reasoning in short chunks. Avoid dense slash-separated phrases,
-punctuation jokes, tables without a spoken summary, and long parentheticals.
-
-When exact commands or paths matter, put them in a visual block and introduce
-the block in plain language. Do not force the listener to infer whether a word
-is prose or a literal token.
-
-## Clear Handoff
-
-For routine work, report the changed files and checks run. Use clear, direct
-language and give a concrete example when a decision would otherwise be hard to
-understand.
+Flag possibly confidential or secret information to the user, and suggest that
+it be handled securely. Do not repeat it in chat, code, logs, or fixtures.
+Prefer inspection to mutation. Ask before destructive, external, billable, or
+irreversible actions not already authorized by the task. Keep service-specific
+safety procedure in an external-service skill.
