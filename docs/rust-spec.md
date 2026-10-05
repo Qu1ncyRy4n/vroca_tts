@@ -1510,7 +1510,8 @@ documents.
 - Whether the `tts-state.json` file is a public interface or only a migration
   artifact (interacts with Decision 8).
 - Whether a spool file remains useful now that a public local API is specified
-  (D1).
+  (D1). The original `/tmp` / `0o666` proposal is rejected; any spool must
+  meet [`agent-input-security.md`](agent-input-security.md).
 - Whether `python_impl/pyproject.toml` should be removed or made authoritative
   (N24), and whether the flake should stop advertising darwin shells (N25).
 
