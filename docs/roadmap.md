@@ -12,12 +12,12 @@ The developer approved this direction on 2026-10-28. Installation and service
 interfaces should survive the Python-to-Rust replacement. Mac support includes
 a UI; global hotkeys are handled through Hammerspoon configuration.
 
-| Order | Work | Observable completion |
+| Order | Work | Current state and completion gate |
 | --- | --- | --- |
-| 1 | Easy Nix installation | One reviewed combined install target, documented install/run commands, and an opt-in Home Manager service interface. Build the selected packages on supported targets. |
-| 2 | Mac daemon and CLI | Apple Silicon packages build; daemon and client use the same private runtime directory; clipboard, local speech, full CLI argument forwarding, duplicate-start refusal, and cleanup pass focused checks. |
-| 3 | Rust review and continuation | Audit existing stages against `rust-spec.md`, settle scope and blocking decisions, then resume bounded implementation slices. Review this before substantial new Mac UI code. |
-| 4 | Mac UI and Hammerspoon | Agree UI behavior and scope, implement controls through the daemon interface, and provide a Lua configuration with documented bindings. Verify actual audio and human-operated flows on Mac. |
+| 1 | Easy Nix installation | Implemented: combined package, install/run guide, overlay, and opt-in Home Manager service. Mac build/checks pass; Linux interfaces evaluate, with native builds still to verify. |
+| 2 | Mac daemon and CLI | Bundle and null-audio synthesis/control/cleanup checks pass. Real audio, clipboard, duplicate startup/stale sockets, and activated service lifecycle remain to verify. |
+| 3 | Rust review and continuation | Pending: audit against `rust-spec.md`, settle scope and blocking decisions, then resume bounded slices before substantial Mac UI code. |
+| 4 | Mac UI and Hammerspoon | Pending: agree UI scope/behavior and bindings, implement through the daemon interface, and verify human-operated flows on Mac. |
 
 This sequence keeps Rust close while establishing a usable packaging boundary.
 Do not require full Python Mac UI parity before beginning the Rust review.
@@ -28,15 +28,21 @@ refined after package evaluation and the Rust audit reveal the actual blockers.
 behavior, API/CLI changes, and UI behavior before implementation. Lower-level
 implementation choices are delegated. Commit only when asked.
 
-Still open: combined package contents and default models, module options,
-Darwin runtime-directory policy, `quit` and logging behavior, and whether the
-Mac UI includes subtitles or RSVP. A native toolkit has not been selected.
-The proposed Home Manager module is reusable repository code; installing or
-activating it in `~/dev/nix-config` still requires separate approval.
+The packaging interfaces were approved and implemented: conventional
+`callPackage`, combined bundle with the existing model set, an overlay, and an
+opt-in Home Manager module. Mac runtime, `quit`, and logging choices are recorded
+in [`installation.md`](installation.md). UI scope (including subtitles/RSVP)
+and toolkit remain open. The Home Manager module is reusable repository code;
+installing or activating it in `~/dev/nix-config` still requires separate
+approval. The package and service milestones are committed; see
+[`pickup_notes.md`](pickup_notes.md) for the restart checklist and Git state.
 
-**Validation status.** This pickup inspected source only. A read-only Mac Nix
-evaluation stalled fetching the pinned nixpkgs input and was interrupted; no
-package build, service activation, or fresh Rust tests completed.
+**Packaging validation.** The Apple Silicon bundle builds, `nix flake check`
+passes seven packaged-client tests, and the native null-audio daemon test passes
+synthesis, controls, catalogue, and cleanup checks. Home Manager module
+evaluations pass for Linux, Mac, and disabled configurations. Linux package
+interfaces are evaluated; Linux builds/runtime checks, actual Mac audio and
+clipboard, and service activation remain unverified. No Rust tests were run.
 
 ---
 
@@ -284,17 +290,16 @@ endpoint is the practical path on this hardware.
 
 ## Track E — macOS Support
 
-**Planned, not deployed.** [`macos-compatibility.md`](macos-compatibility.md)
+**Packaging implemented; not deployed.** [`macos-compatibility.md`](macos-compatibility.md)
 defines Apple Silicon daemon/client and UI milestones. The package remains owned by
 this flake; a Home Manager LaunchAgent belongs in the separately owned
 `~/dev/nix-config` only after approval. Linux GTK overlay/panel packages remain
 Linux-only. The Mac UI scope is open; Hammerspoon owns global hotkeys.
 
-The immediate work is to make `tts` portable by removing its unconditional
-`systemd` dependency on Darwin, establish one shared Darwin runtime-directory
-policy, and validate the daemon and client on physical Apple Silicon hardware.
-The `quit` lifecycle and Darwin logging behavior require explicit decisions
-before the LaunchAgent is declared.
+The portable `tts` wrapper, shared Darwin runtime directory, logging behavior,
+and crash-only LaunchAgent policy are implemented in the package/module.
+Validation of the daemon and client on physical Apple Silicon hardware precedes
+deployment; Mac UI and Hammerspoon work follow the Rust review.
 
 ---
 

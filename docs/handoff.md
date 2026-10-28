@@ -35,6 +35,7 @@ fixed.
 | What must Rust build? | [`rust-spec.md`](rust-spec.md) — normative, owns every decision |
 | What still needs migration fixtures? | [`legacy-compatibility.md`](legacy-compatibility.md) |
 | How do I *call* Vroca from another program? | [`integration.md`](integration.md) |
+| How do I install or enable Vroca declaratively? | [`installation.md`](installation.md) — packages, overlay, and Home Manager service |
 | How should conversational interruption, channels, and voice overlap work? | [`conversational-audio-recommendation.md`](conversational-audio-recommendation.md) — recommendation pending specification decisions |
 | What is the bounded macOS compatibility path? | [`macos-compatibility.md`](macos-compatibility.md) — Apple Silicon daemon/client, UI, and Hammerspoon plan |
 | What order does work happen in? | [`roadmap.md`](roadmap.md) |
@@ -91,8 +92,8 @@ Already true before the sweep, verified rather than re-fixed: N11 and N13
 
 Not fixed deliberately, still open: N21 (`position bottom` equals `center`
 in RSVP modes — a UX decision), N23 (client auto-start policy — §7.2),
-N24/N25 packaging questions (§7.13), D5 (shell client argument forwarding —
-lives in the deployment repo).
+N24/N25 packaging questions (§7.13). D5 (shell client argument forwarding) was
+subsequently fixed in this repository's Nix package; see `installation.md`.
 
 Deploy note: these commits are **not** on the running daemon yet. Update the
 `vroca_tts` input in `~/dev/nix-config`, review and commit its lockfile, then
@@ -212,6 +213,12 @@ Needs attention:
 ---
 
 ## 7. What To Do Next
+
+**2026-10-28 pickup:** Nix packaging is implemented and verified on Apple
+Silicon, with Linux interfaces evaluated. Package and service changes are
+committed locally; no deployment was activated. Start at
+[`pickup_notes.md`](pickup_notes.md) for the implementation map, exact checks,
+remaining Mac validation, and Git state.
 
 The active sequence is now owned by [`roadmap.md`](roadmap.md): easy Nix
 installation, Mac daemon/client support, Rust review before substantial Mac UI
