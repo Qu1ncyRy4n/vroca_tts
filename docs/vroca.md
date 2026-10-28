@@ -106,16 +106,17 @@ Two behaviors of the deployed `tts` shell client are not socket commands:
 | `tts` with no arguments | Sends `read`. |
 | `tts log` | Runs `journalctl --user -u tts -u tts-overlay -f`. Never contacts the socket. |
 
-The client also forwards trailing arguments only for `say`, `speak`, and
-`queue`. Other commands are sent without arguments, so `tts speed 1.2` sends a
-bare `speed`. Use the socket directly for those until the Rust CLI replaces it.
+The packaged client forwards arguments for every socket command, including
+`tts speed 1.2`, `tts voice kokoro:af_kore`, and `tts mode_set scroll_rsvp`.
+On macOS, `tts log` follows `~/Library/Logs/vroca.log` instead of the journal.
+See [`installation.md`](installation.md) for runtime and service behavior.
 
 ---
 
 ## 3. Implemented Capabilities
 
 ### A. Synthesis Engines
-- **Kokoro v1.0:** Default engine. 53 real-named voices. RTF ~0.99.
+- **Kokoro v1.0:** Default engine. 54 real-named voices in the repinned archive (see `installation.md`). RTF ~0.99 from the original 53-voice model measurements.
 - **Supertonic:** Ultra-low latency (RTF ~0.30), 10 voices.
 - **LibriTTS-R:** High-variety catalogue (904 voices, RTF ~0.03), catalogued by median F0 (pitch).
 - **ZipVoice:** Zero-shot voice cloning from reference 5-20s `.wav` clips in `~/.config/tts/voices`.

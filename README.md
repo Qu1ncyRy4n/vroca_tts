@@ -11,6 +11,22 @@
 * `docs/` — Architecture documentation (`vroca.md`), the guide for programs calling Vroca (`integration.md`), the normative Rust specification (`rust-spec.md`), the migration parity checklist (`legacy-compatibility.md`), the roadmap (`roadmap.md`), the handoff (`handoff.md`), and pickup notes (`pickup_notes.md`).
 * `scripts/` — Demos and tooling (`multivoice_demo.py`).
 * `flake.nix` — Nix flake environment and deployable package outputs.
+* `nix/` — Conventional package expression and overlay support.
+
+## Nix Installation
+
+Build the command bundle from the local checkout:
+
+```sh
+cd ~/dev/exocortex/vroca_tts
+nix build
+./result/bin/tts-daemon
+```
+
+In another terminal, run `./result/bin/tts say "Hello from Vroca."`.
+For declarative package installation, see
+[`docs/installation.md`](docs/installation.md). The package supports Linux and
+Apple Silicon macOS; Mac UI and Hammerspoon integration remain planned.
 
 ## Current Priorities
 
@@ -18,8 +34,8 @@ The agreed order is easy Nix installation, working Apple Silicon macOS support,
 then the staged Rust replacement. Mac support includes a UI and Hammerspoon
 configuration for hotkeys; the UI scope and toolkit remain open.
 
-The flake already exports individual Python packages and models. A combined
-install target and reusable service module are planned, not yet available.
+The flake exports the combined `vroca` package, individual Python packages and
+models, and an overlay. The opt-in Home Manager service module is next.
 Python remains the production implementation; the Rust scaffold needs review
 before its migration stages can be accepted as complete.
 

@@ -329,9 +329,10 @@ tts log                 # follow the journal
 tts                     # no args == read selection
 ```
 
-The `tts` shell client forwards trailing arguments only for `say`, `speak` and
-`queue`. `tts speed 1.2` sends a bare `speed`. Use the socket directly for other
-commands with arguments.
+The packaged `tts` client now forwards arguments for every socket command;
+`tts speed 1.2` and voice selection work directly (D5). `tts log` follows the
+journal on Linux and `~/Library/Logs/vroca.log` on Mac. See
+[`installation.md`](installation.md) for installation and daemon startup.
 
 ---
 

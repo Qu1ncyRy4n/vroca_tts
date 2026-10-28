@@ -15,6 +15,8 @@ KOKORO_V1_0 = [
     "jm_kumo", "pf_dora", "pm_alex", "pm_santa", "zf_xiaobei", "zf_xiaoni",
     "zf_xiaoxiao", "zf_xiaoyi", "zm_yunjian", "zm_yunxi", "zm_yunxia",
     "zm_yunyang",
+    # The repinned v1.0 archive appends this voice; IDs 0–52 stay unchanged.
+    "em_santa",
 ]
 
 LANGS = {

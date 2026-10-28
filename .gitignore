@@ -22,6 +22,10 @@ target
 
 **/__pycache__
 
+# Nix build output symlinks.
+/result
+/result-*
+
 # Credentials belong in user-managed files outside the repository.
 .env
 .env.*
