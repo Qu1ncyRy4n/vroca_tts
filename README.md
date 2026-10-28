@@ -11,3 +11,18 @@
 * `docs/` — Architecture documentation (`vroca.md`), the guide for programs calling Vroca (`integration.md`), the normative Rust specification (`rust-spec.md`), the migration parity checklist (`legacy-compatibility.md`), the roadmap (`roadmap.md`), the handoff (`handoff.md`), and pickup notes (`pickup_notes.md`).
 * `scripts/` — Demos and tooling (`multivoice_demo.py`).
 * `flake.nix` — Nix flake environment and deployable package outputs.
+
+## Current Priorities
+
+The agreed order is easy Nix installation, working Apple Silicon macOS support,
+then the staged Rust replacement. Mac support includes a UI and Hammerspoon
+configuration for hotkeys; the UI scope and toolkit remain open.
+
+The flake already exports individual Python packages and models. A combined
+install target and reusable service module are planned, not yet available.
+Python remains the production implementation; the Rust scaffold needs review
+before its migration stages can be accepted as complete.
+
+Start with [`docs/pickup_notes.md`](docs/pickup_notes.md) for current status and
+[`docs/roadmap.md`](docs/roadmap.md) for the work sequence. The Mac plan is in
+[`docs/macos-compatibility.md`](docs/macos-compatibility.md).

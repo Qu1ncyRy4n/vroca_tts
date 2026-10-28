@@ -1,10 +1,22 @@
-# Pickup Notes & Development Roadmap
+# Pickup Notes
+
+Updated 2026-10-28. [`roadmap.md`](roadmap.md) owns sequencing;
+[`rust-spec.md`](rust-spec.md) owns Rust behavior and migration decisions.
 
 ## Current State
 
 * **Location:** `~/dev/exocortex/vroca_tts`
 * **Active Python Stack:** `python_impl/` containing `daemon.py`, `overlay.py`, `panel.py`, `measure.py`, `voices.py`.
-* **Rust Placeholder:** `rust_impl/` is reserved for a staged Rust replacement. Python remains usable until the Rust parity gate passes.
+* **Rust Scaffold:** `rust_impl/` contains the workspace, domain code, client,
+  CLI, and fake daemon/player work. It is unreviewed against the specification;
+  panel and overlay binaries are empty stubs. Python remains usable until the
+  Rust parity gate passes.
+* **Nix Packaging:** Individual packages and models already live in
+  `flake.nix`, along with the Rust toolchain. Easy installation and reusable
+  service configuration remain to be built.
+* **macOS:** Apple Silicon is the target. `pbpaste` support exists, but package
+  evaluation, local audio, and service lifecycle have not been verified in this
+  pickup. The CLI still unconditionally depends on `systemd`.
 
 ---
 
@@ -21,21 +33,24 @@
 
 ## Handoff
 
-[`handoff.md`](handoff.md) is the entry point for anyone picking this up: the
-document map, the traps that cost real time, and what to do next.
+[`handoff.md`](handoff.md) holds the document map, historical validation, and
+the traps that cost real time. Use [`roadmap.md`](roadmap.md) for current work
+order.
 
-## Staged Rust Replacement Roadmap (`rust_impl/`)
+## Next Work — Agreed 2026-10-28
 
-1. ~~Resolve the open decisions needed for the first slice.~~ **Done.**
-   Seventeen decisions are recorded with justification in
-   [`rust-spec.md`](rust-spec.md) §6. Remaining open questions are in §7, each
-   noting what it blocks.
-2. Add a Rust toolchain to `flake.nix`. The flake currently has none, which
-   blocks all Rust work.
-3. Initialize the reviewed three-crate workspace in `rust_impl/`
-   (`rust-spec.md` §8 bounds exactly what the first slice may contain).
-4. Implement typed operations, protocol compatibility, and a local client.
-5. Reach daemon, CLI, overlay, and panel parity on Linux.
-6. Switch Nix deployment only after the parity gate passes
-   (`rust-spec.md` §9.2).
-7. Retire Python in a later reviewable change.
+1. Make Nix installation straightforward: propose a combined package,
+   install/run commands, and an opt-in Home Manager service interface.
+2. Make the Mac daemon and CLI work: remove Linux-only dependencies, define a
+   shared private runtime directory, decide logging and shutdown behavior, and
+   validate on Apple Silicon before deployment.
+3. Review the Rust scaffold against the spec before substantial new Mac UI
+   work. Reconcile scope violations and unresolved decisions, then continue in
+   bounded slices. Keep package and CLI interfaces stable through replacement.
+4. Deliver the Mac UI and Hammerspoon hotkey configuration. Controls only,
+   subtitles, and RSVP scope remain unresolved; do not choose a toolkit yet.
+
+The developer approves interface choices: installation commands, service
+behavior, API/CLI shape, and UI behavior. Implementation details are delegated.
+Commit only when asked. `~/dev/nix-config` remains a separately approved
+deployment boundary. See the roadmap for validation gates and deferred work.

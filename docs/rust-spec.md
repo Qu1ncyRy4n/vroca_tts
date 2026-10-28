@@ -91,6 +91,12 @@ accidents merely because they are observable.
 This section records what exists today. It is evidence, not a specification of
 what Rust must do.
 
+**Historical baseline.** Sections 3–5 and the “Current behavior” paragraphs in
+§6 record the original design audit. They are not a fresh description of the
+current checkout: the Python sweep fixed many findings, and the flake now has a
+Rust toolchain. See `handoff.md` for the sweep and `roadmap.md` for current
+priorities and implementation review status.
+
 ### 3.1 Programs
 
 ```text
@@ -1534,8 +1540,8 @@ The first Rust change is bounded. It MUST contain only:
 It MUST NOT contain: sockets, `mpv`, audio, GTK, `sherpa-onnx`, systemd
 integration, or any change under `~/dev/nix-config`.
 
-**Prerequisite.** `flake.nix` must gain a Rust toolchain (N26). That is itself a
-reviewed change requiring `nix develop` approval and a lockfile refresh.
+**Prerequisite implemented.** `flake.nix` now provides the Rust toolchain
+(N26). Its presence does not establish first-slice compliance or parity.
 
 ---
 
@@ -1577,11 +1583,13 @@ Rust MAY replace Python in deployment only when all of the following hold.
 ### 9.3 Migration Stages
 
 1. Lock the decisions needed for the first slice. **Complete — section 6.**
-2. Add the Rust toolchain and the reviewed workspace shape. **Done**
+2. Add the Rust toolchain and workspace shape. **Present; review pending.**
 3. Typed operations, state transitions, and protocol parsers with no audio
-   dependency. **Done**
-4. Public client and CLI against a fake daemon. **Done**
-5. Daemon lifecycle with fake engine and fake player. **Done**
+   dependency. **Code present; review and acceptance pending.**
+4. Public client and CLI against a fake daemon. **Code present; review and
+   acceptance pending.**
+5. Daemon lifecycle with fake engine and fake player. **Code present; review
+   and acceptance pending.**
 6. One local synthesis engine and real playback.
 7. Remaining approved local engines and alignment.
 8. Overlay and panel through the shared client.

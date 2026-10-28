@@ -1,9 +1,13 @@
 # Vroca Handoff
 
 For whoever picks this up next. Written 2026-08-07, at the end of the Rust
-design phase and the first round of Python improvements.
+design phase and the first round of Python improvements. Current-priority and
+review-status notes updated 2026-10-28; deployment claims below are historical
+and have not been reverified in this pickup.
 
-Read this first, then [`rust-spec.md`](rust-spec.md).
+Read [`pickup_notes.md`](pickup_notes.md) for current status and
+[`roadmap.md`](roadmap.md) for the active plan. Use this document for historical
+evidence and traps; read [`rust-spec.md`](rust-spec.md) before Rust changes.
 
 ---
 
@@ -27,16 +31,16 @@ fixed.
 | Question | Document |
 |:---|:---|
 | What is the system *promised* to do? | [`vroca.md`](vroca.md) — the public contract |
-| What does the Python code *actually* do? | [`rust-spec.md`](rust-spec.md) §5, the mismatch register |
+| What was found in the Python audit? | [`rust-spec.md`](rust-spec.md) §5, the historical mismatch register; §3 below records the subsequent fixes |
 | What must Rust build? | [`rust-spec.md`](rust-spec.md) — normative, owns every decision |
 | What still needs migration fixtures? | [`legacy-compatibility.md`](legacy-compatibility.md) |
 | How do I *call* Vroca from another program? | [`integration.md`](integration.md) |
 | How should conversational interruption, channels, and voice overlap work? | [`conversational-audio-recommendation.md`](conversational-audio-recommendation.md) — recommendation pending specification decisions |
-| What is the bounded macOS compatibility path? | [`macos-compatibility.md`](macos-compatibility.md) — Apple Silicon daemon and client plan |
+| What is the bounded macOS compatibility path? | [`macos-compatibility.md`](macos-compatibility.md) — Apple Silicon daemon/client, UI, and Hammerspoon plan |
 | What order does work happen in? | [`roadmap.md`](roadmap.md) |
 
-`vroca.md` deliberately does **not** describe the implementation. Three rows in
-its command table are marked where the code does not honor the contract.
+`vroca.md` deliberately does **not** describe the implementation. Its three
+historically flagged command rows were reconciled by the Python sweep below.
 
 ---
 
@@ -101,9 +105,10 @@ citing a line of code, and 21 open questions each naming what it blocks.
 
 ### Rust started, needs review
 
-`rust_impl/` has the three-crate workspace, 19 passing tests, clean `fmt`. See
-§6 below — it was not authored during the design session and has not been
-reviewed against the spec.
+`rust_impl/` has the workspace and domain, client/CLI, and fake daemon/player
+code. The earlier handoff recorded 19 passing tests and clean `fmt`; these were
+not rerun in this pickup. Panel and overlay binaries are empty stubs. See §6:
+spec review and migration-stage acceptance remain pending.
 
 ---
 
@@ -166,7 +171,8 @@ service units and desktop hotkeys.
 
 **`catalogue` is over 100 KB.** 101,359 bytes for libritts against roughly
 106 KB of effective socket buffer. Read to EOF; a single `recv()` truncates.
-The daemon still uses `send()` and discards the return value (N5).
+The original `send()` defect (N5) was fixed with `sendall()` in the Python
+sweep; clients still need to read the entire response.
 
 **Select-then-queue does not set per-item voices.** Items render when they reach
 the front, not when submitted. The voice must travel with the item.
@@ -184,8 +190,9 @@ off", check whether an exception is being eaten.
 
 ## 6. The Rust Code — Read Before Trusting
 
-Committed at `94ac41a`. Compiles, 19 tests pass, `fmt` clean. **Not authored or
-reviewed during the design session.**
+Committed at `94ac41a`. Historical validation: compiled, 19 tests passed,
+`fmt` clean. **Not reviewed during the design session; no fresh checks in the
+2026-10-28 pickup.**
 
 Good: tests cite spec identifiers. `test_d2_say_clears_waiting`,
 `test_d3_skip_abandons_current` and `test_d4_queue_paused_appends` prove the
@@ -198,13 +205,21 @@ Needs attention:
   mpv; there are eight `UnixListener`/`UnixStream` references and `vroca-daemon`
   mentions mpv. The boundary moved without a recorded decision. Either record
   one or pull it back.
-- `forbid(unsafe_code)` is in one crate; §7.6 recommends all three.
+- Check `forbid(unsafe_code)` across all three crates; §7.6 recommends it.
 - Nothing has been checked against the open questions. Code that resolves one
   implicitly is exactly what the spec warns about.
 
 ---
 
 ## 7. What To Do Next
+
+The active sequence is now owned by [`roadmap.md`](roadmap.md): easy Nix
+installation, Mac daemon/client support, Rust review before substantial Mac UI
+work, then the Mac UI and Hammerspoon integration. Interface decisions require
+developer approval. The Mac UI's controls/subtitle/RSVP scope is still open.
+
+The items below retain the earlier handoff's backlog context; they are not a
+competing priority order.
 
 1. **Review the Rust against the spec** (§6 above). Settle the scope question
    first — it changes what "done" means for the slice.
@@ -214,7 +229,7 @@ approval-sensitive). Verify with
    `tts speed abc` (typed error), a second `tts-daemon` start (refusal), and
    `quit` + socket check (clean exit).
 3. **Run `scripts/multivoice_demo.py`.** The overlapping half is an experiment,
-   not a demo: whether the overlap is followable decides open question 10-a.
+   not a demo: it can inform overlap implementation and intelligibility checks.
    User direction so far: overlap should be a per-caller choice (games and
    simulations want it; GUI tools and notifications must not) — recorded in
    `rust-spec.md` §10.

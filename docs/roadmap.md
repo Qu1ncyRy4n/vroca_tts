@@ -1,9 +1,42 @@
 # Vroca Roadmap
 
 Where the project is and what happens next. [`rust-spec.md`](rust-spec.md) owns
-the decisions; this is the sequencing.
+Rust behavior and migration decisions; this document records current priority
+direction and sequencing.
 
-Last updated 2026-08-07.
+Last updated 2026-10-28.
+
+## Active Plan — Nix Installation, Mac Support, Then Rust
+
+The developer approved this direction on 2026-10-28. Installation and service
+interfaces should survive the Python-to-Rust replacement. Mac support includes
+a UI; global hotkeys are handled through Hammerspoon configuration.
+
+| Order | Work | Observable completion |
+| --- | --- | --- |
+| 1 | Easy Nix installation | One reviewed combined install target, documented install/run commands, and an opt-in Home Manager service interface. Build the selected packages on supported targets. |
+| 2 | Mac daemon and CLI | Apple Silicon packages build; daemon and client use the same private runtime directory; clipboard, local speech, full CLI argument forwarding, duplicate-start refusal, and cleanup pass focused checks. |
+| 3 | Rust review and continuation | Audit existing stages against `rust-spec.md`, settle scope and blocking decisions, then resume bounded implementation slices. Review this before substantial new Mac UI code. |
+| 4 | Mac UI and Hammerspoon | Agree UI behavior and scope, implement controls through the daemon interface, and provide a Lua configuration with documented bindings. Verify actual audio and human-operated flows on Mac. |
+
+This sequence keeps Rust close while establishing a usable packaging boundary.
+Do not require full Python Mac UI parity before beginning the Rust review.
+Python stays usable until the Rust parity gate passes. Work estimates should be
+refined after package evaluation and the Rust audit reveal the actual blockers.
+
+**Decision involvement: interface.** Present installation commands, service
+behavior, API/CLI changes, and UI behavior before implementation. Lower-level
+implementation choices are delegated. Commit only when asked.
+
+Still open: combined package contents and default models, module options,
+Darwin runtime-directory policy, `quit` and logging behavior, and whether the
+Mac UI includes subtitles or RSVP. A native toolkit has not been selected.
+The proposed Home Manager module is reusable repository code; installing or
+activating it in `~/dev/nix-config` still requires separate approval.
+
+**Validation status.** This pickup inspected source only. A read-only Mac Nix
+evaluation stalled fetching the pinned nixpkgs input and was interrupted; no
+package build, service activation, or fresh Rust tests completed.
 
 ---
 
@@ -25,9 +58,11 @@ master volume and per-voice trim ship with panel sliders; queue items carry
 their own voice; engine construction is extracted so daemon edits no longer
 re-measure 904 voices.
 
-**The first Rust slice exists but is unreviewed.** `rust_impl/` compiles with 19
-passing tests. It was not authored during the design session and has not been
-checked against the specification. See [`handoff.md`](handoff.md) §6.
+**Rust code exists but is unreviewed.** The earlier handoff records 19 passing
+tests and clean formatting; those checks were not rerun in this pickup.
+Domain, client/CLI, and fake daemon/player code exists; both GUI binaries are
+empty stubs. Spec compliance and migration-stage acceptance remain pending.
+See [`handoff.md`](handoff.md) §6.
 
 **The Python mismatch register was swept (2026-09-01).** Eighteen commits
 fixed the process-safety, input-safety, and semantics findings — D2, D3, D4,
@@ -182,10 +217,10 @@ Sequencing from `rust-spec.md` §9.3. Track A does not block any of it.
 | Stage | Content | State |
 |:---|:---|:---|
 | 1 | Lock first-slice decisions | **Done** |
-| 2 | Rust toolchain and workspace | **Done** — flake has the toolchain, workspace scaffolded |
+| 2 | Rust toolchain and workspace | Present; workspace review pending |
 | 3 | Typed operations, state transitions, protocol parsers. No audio. | **Implemented, unreviewed** — see `handoff.md` §6 |
-| 4 | Public client and CLI against a fake daemon | |
-| 5 | Daemon lifecycle, fake engine and player | |
+| 4 | Public client and CLI against a fake daemon | Code present; review and acceptance pending |
+| 5 | Daemon lifecycle, fake engine and player | Code present; review and acceptance pending |
 | 6 | One local engine, real playback | |
 | 7 | Remaining engines and alignment | |
 | 8 | Overlay and panel through the shared client | |
@@ -212,7 +247,7 @@ It is intentionally non-normative until those choices are incorporated into
 
 | | Capability | Blocking question |
 |:---|:---|:---|
-| R1 | Multiple voices, channels, scheduling | Interleaved or genuinely overlapping? |
+| R1 | Multiple voices, channels, scheduling | Both playback modes requested; declaration and scheduling remain open |
 | R2 | Model residency, preload and unload by `ModelId` | Explicit-only, or eviction under memory pressure? |
 | R3 | Local voice sources | Reference clips only, or model files with a trust rule? |
 | R4 | Low latency | Chunking policy per engine |
@@ -247,13 +282,13 @@ endpoint is the practical path on this hardware.
 
 ---
 
-## Track E — macOS Daemon And Client
+## Track E — macOS Support
 
 **Planned, not deployed.** [`macos-compatibility.md`](macos-compatibility.md)
-defines an Apple Silicon daemon-and-client slice. The package remains owned by
+defines Apple Silicon daemon/client and UI milestones. The package remains owned by
 this flake; a Home Manager LaunchAgent belongs in the separately owned
-`~/dev/nix-config` only after approval. The first slice excludes the Linux GTK
-overlay/panel and global hotkeys.
+`~/dev/nix-config` only after approval. Linux GTK overlay/panel packages remain
+Linux-only. The Mac UI scope is open; Hammerspoon owns global hotkeys.
 
 The immediate work is to make `tts` portable by removing its unconditional
 `systemd` dependency on Darwin, establish one shared Darwin runtime-directory
@@ -263,12 +298,10 @@ before the LaunchAgent is declared.
 
 ---
 
-## Suggested Order
+## Deferred Work
 
-1. ~~Change `measureSrc`, update the lock, rebuild.~~ **Done and verified live:**
-   `voice kokoro:af_kore` resolves across engines, `trim -15` gives effective
-   65, and two queued items retain distinct voices.
-2. **Rust stage 3** — the first real slice.
-3. Track C questions as they start blocking Track B. `scripts/multivoice_demo.py`
-   answers 10-a by ear: play the alternating and overlapping halves and note
-   which one you can actually follow.
+Follow the active plan above. Track C channel scheduling, interruption, model
+residency, audio sinks, and streaming remain separate design work. The overlap
+choice is already per-caller (10-a); listening experiments can inform its
+implementation but do not reopen that direction. Python retirement remains a
+later decision after Rust parity and rollback validation.

@@ -1,15 +1,20 @@
 # macOS Compatibility Plan
 
-Vroca can run as a reproducibly packaged, per-user daemon on Apple Silicon
-macOS. The deployment mechanism is a Nix-built executable supervised by a
+Updated 2026-10-28. Approved direction: a working Apple Silicon release with
+a UI and Hammerspoon configuration for global hotkeys. The developer approves
+interface choices; UI scope and toolkit selection remain unresolved.
+
+The target is a reproducibly packaged, per-user daemon on Apple Silicon
+macOS. The planned deployment is a Nix-built executable supervised by a
 declarative `launchd` LaunchAgent. It does not require Homebrew, `brew
 services`, or an installation script that modifies Nix configuration.
 
-This is a plan, not an approved deployment change. Vroca owns its packages and
-wrappers; `~/dev/nix-config` owns the user LaunchAgent and activation after
-separate approval.
+This is a plan, not an approved deployment change. Vroca owns its packages,
+wrappers, and proposed reusable Home Manager module; `~/dev/nix-config` owns
+opting into that module and activating the user LaunchAgent after separate
+approval.
 
-## First Slice
+## First Milestone — Daemon And Client
 
 The initial macOS target is intentionally limited to:
 
@@ -17,12 +22,30 @@ The initial macOS target is intentionally limited to:
 - Local Unix-socket commands and local `mpv` playback.
 - `read` through one explicit `pbpaste` read of the general clipboard.
 - A per-user LaunchAgent that keeps the foreground daemon running while the
-  user is logged in.
+  user is logged in. Service configuration is opt-in.
 
 It explicitly excludes the GTK overlay, RSVP modes, GTK panel, Wayland/X11
-selection backends, `systemd`, `journalctl`, and global hotkeys. A later native
-macOS UI or hotkey helper must remain a daemon client, not a second runtime-state
-owner.
+selection backends, `systemd`, and `journalctl`. This bounds the first milestone,
+not the full Mac release. The UI and hotkeys follow below; each remains a daemon
+client, not a second runtime-state owner.
+
+## Mac UI And Hammerspoon Milestone
+
+The Mac release must include a UI. Decide whether the initial UI contains only
+voice/playback/speed/volume controls and daemon status, also subtitles, or full
+RSVP overlays. No toolkit or native application packaging has been chosen.
+Present proposed UI behavior and a short manual verification path before
+implementation.
+
+Global hotkeys are supplied as Hammerspoon Lua configuration calling `tts`.
+Agree bindings and the installed executable path before implementation. Ship
+configuration and setup instructions here; changing the user's active
+Hammerspoon configuration requires approval. Clipboard access, required macOS
+permissions, and focus behavior need verification on the target Mac.
+
+Review the Rust scaffold before substantial new UI work, so the UI language and
+toolkit decision can account for the imminent Rust replacement. Preserve the
+installed command names and daemon interface through migration.
 
 ## Why LaunchAgent
 
@@ -73,9 +96,11 @@ directory fallback and the client's `/tmp` fallback are not guaranteed to agree.
    that behavior implicitly.
 3. Define Darwin `tts log`. The Linux `journalctl` command cannot carry over;
    the first slice may return an explicit unsupported response.
-4. Decide global-hotkey scope separately. nix-darwin and Home Manager do not
-   declaratively register arbitrary system-wide hotkeys. A native GUI-session
-   helper would need a chosen API and verified TCC permissions.
+4. Define UI scope, user-visible behavior, toolkit, and application launch
+   interface. UI is required; controls versus subtitles/RSVP is still open.
+5. Define Hammerspoon bindings and how its configuration finds the installed
+   `tts` executable. Verify its required permissions rather than adding a
+   second hotkey helper.
 
 ## Implementation Sequence
 
@@ -92,7 +117,11 @@ directory fallback and the client's `/tmp` fallback are not guaranteed to agree.
 5. After explicit approval in `~/dev/nix-config`, declare the Home Manager
    LaunchAgent, package installation, runtime directory, and log directory.
 6. Validate login start, crash restart, clean shutdown, stale-socket recovery,
-   player cleanup, clipboard denial/empty text, and no-UI CLI operation.
+   player cleanup, clipboard denial/empty text, and CLI operation.
+7. Review Rust scope and unresolved decisions before substantial UI code.
+8. After UI interface review, implement and package the Mac UI and provide the
+   Hammerspoon configuration. Validate controls, hotkeys, and any approved
+   overlay behavior with the developer on Mac.
 
 ## Validation
 
