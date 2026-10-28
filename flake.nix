@@ -33,6 +33,8 @@
         vroca = final.callPackage ./nix/package.nix { };
       };
 
+      homeModules.default = import ./nix/home-manager.nix;
+
       checks = forAllSystems (
         system:
         let

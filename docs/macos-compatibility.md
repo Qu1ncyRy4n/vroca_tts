@@ -10,9 +10,15 @@ declarative `launchd` LaunchAgent. It does not require Homebrew, `brew
 services`, or an installation script that modifies Nix configuration.
 
 This is a plan, not an approved deployment change. Vroca owns its packages,
-wrappers, and proposed reusable Home Manager module; `~/dev/nix-config` owns
+wrappers, and reusable Home Manager module; `~/dev/nix-config` owns
 opting into that module and activating the user LaunchAgent after separate
 approval.
+
+**Packaging validation:** the Apple Silicon package build, packaged-client
+tests, and native null-audio synthesis/control/cleanup test pass. The module
+evaluates against Home Manager's option types. Actual audio, clipboard access,
+and activated LaunchAgent lifecycle have not been verified. See
+[`installation.md`](installation.md) for commands and the test boundary.
 
 ## First Milestone — Daemon And Client
 
@@ -60,84 +66,77 @@ design. Launchd socket activation is also out of scope: Vroca owns and binds its
 published socket, whereas launchd socket activation would require the daemon to
 accept launchd-provided descriptors.
 
-The eventual deployment declaration belongs in `~/dev/nix-config` and should be
-shaped like this after its owner approves the change:
+The package and module are implemented here. Opting into the service in
+`~/dev/nix-config` still requires approval. Import the module and enable it as
+described in [`installation.md`](installation.md):
 
 ```nix
-launchd.agents.vroca = {
-  enable = true;
-  domain = "gui";
-  config = {
-    ProgramArguments = [ "${vroca.tts-daemon}/bin/tts-daemon" ];
-    KeepAlive = true;
-    ProcessType = "Background";
-    EnvironmentVariables = {
-      XDG_RUNTIME_DIR = runtimeDir;
-      XDG_CONFIG_HOME = "/Users/q/.config";
-    };
-    StandardOutPath = "/Users/q/Library/Logs/vroca.log";
-    StandardErrorPath = "/Users/q/Library/Logs/vroca.log";
-  };
-};
+imports = [ inputs.vroca.homeModules.default ];
+services.vroca.enable = true;
 ```
 
-`runtimeDir` must be a short, private, user-owned directory created
-declaratively before the agent starts. Both the agent and interactive `tts`
-client must receive the same `XDG_RUNTIME_DIR`; the daemon's Python temporary
-directory fallback and the client's `/tmp` fallback are not guaranteed to agree.
+The module sets `RunAtLoad = true` and `KeepAlive.SuccessfulExit = false`.
+The packaged daemon and client share `~/Library/Caches/vroca` when
+`XDG_RUNTIME_DIR` is unset. The daemon creates it with mode `0700`; wrappers
+reject symlinks, non-directories, and foreign ownership. No global runtime
+environment setting or installer script is needed.
 
-## Required Decisions
+## Packaging Decisions — Approved 2026-10-28
 
-1. Define the Darwin runtime-directory location, lifecycle, and permissions.
-   It must preserve the daemon-owned `$XDG_RUNTIME_DIR/tts.sock` interface and
-   safely recover only Vroca's stale socket.
-2. Define `tts quit` under launchd. Linux currently leaves a cleanly exited
-   systemd service stopped; `KeepAlive = true` would restart it. Do not change
-   that behavior implicitly.
-3. Define Darwin `tts log`. The Linux `journalctl` command cannot carry over;
-   the first slice may return an explicit unsupported response.
-4. Define UI scope, user-visible behavior, toolkit, and application launch
+1. Conventional `callPackage` package, combined default bundle, optional
+   overlay, and opt-in `services.vroca` Home Manager module.
+2. Runtime directory: preserve supplied `XDG_RUNTIME_DIR`; otherwise use the
+   private Mac cache directory above. The socket remains `tts.sock`.
+3. `tts quit` leaves the agent stopped; unsuccessful exits are restarted.
+4. `tts log` follows `~/Library/Logs/vroca.log` on Mac.
+
+## Remaining Decisions
+
+1. Define UI scope, user-visible behavior, toolkit, and application launch
    interface. UI is required; controls versus subtitles/RSVP is still open.
-5. Define Hammerspoon bindings and how its configuration finds the installed
+2. Define Hammerspoon bindings and how its configuration finds the installed
    `tts` executable. Verify its required permissions rather than adding a
    second hotkey helper.
 
 ## Implementation Sequence
 
-1. In this repository, make the `tts` wrapper platform-aware: retain `socat` on
-   Darwin, but include `systemd` and `journalctl` behavior only on Linux.
-2. Give `tts-daemon` and `tts` one shared Darwin runtime-directory rule while
-   preserving supplied `XDG_RUNTIME_DIR` values and the existing socket
-   protocol.
-3. Add Darwin selection tests for the existing `pbpaste` path and Darwin
-   evaluation checks for `tts-daemon` and `tts`. Do not add overlay or panel
-   outputs to this slice.
-4. On an Apple Silicon Mac, build the two packages and run a null-audio daemon
-   smoke test before changing deployment configuration.
-5. After explicit approval in `~/dev/nix-config`, declare the Home Manager
-   LaunchAgent, package installation, runtime directory, and log directory.
-6. Validate login start, crash restart, clean shutdown, stale-socket recovery,
-   player cleanup, clipboard denial/empty text, and CLI operation.
-7. Review Rust scope and unresolved decisions before substantial UI code.
-8. After UI interface review, implement and package the Mac UI and provide the
-   Hammerspoon configuration. Validate controls, hotkeys, and any approved
-   overlay behavior with the developer on Mac.
+| Step | Status |
+| --- | --- |
+| Platform-aware daemon/client package; no Mac `systemd` dependency | Implemented and built |
+| Shared private runtime directory, preserving supplied `XDG_RUNTIME_DIR` | Implemented; fallback and unsafe-path rejection tested |
+| Mac package/client checks and native null-audio daemon test | Passed |
+| Opt-in Home Manager LaunchAgent and log-directory setup | Implemented and evaluated; not activated |
+| `pbpaste` tests and actual clipboard/audio use | Pending |
+| Duplicate startup, stale-socket recovery, login start, crash restart, and clean quit under launchd | Pending |
+| Rust scope/spec review before substantial UI code | Pending |
+| Mac UI and Hammerspoon configuration | Pending interface decisions and implementation |
+
+Next, validate audio and clipboard on the target Mac. After separate approval,
+enable the module in `~/dev/nix-config` and verify the activated lifecycle.
+Review Rust before substantial UI work, then implement and manually verify the
+approved controls, bindings, and any overlay behavior.
 
 ## Validation
 
 Run these on the target Apple Silicon Mac before deployment activation:
 
 ```sh
-nix build --no-link .#packages.aarch64-darwin.tts-daemon
-nix build --no-link .#packages.aarch64-darwin.tts
+nix flake check --no-write-lock-file
+nix build --no-write-lock-file
+python3 tests/test_packaged_daemon.py ./result/bin
 nix develop --command python3 -m unittest python_impl/test_daemon.py
 ```
+
+The packaged-daemon check must run in the login session: AppKit initialization
+in `mpv` aborts inside the build sandbox even with null audio. The existing
+`test_daemon.py` suite covers Linux selection fallback; Darwin-specific
+clipboard tests are still pending. Neither suite proves real audio output.
 
 After approved LaunchAgent activation, use `TTS_MPV_ARGS=--ao=null` for the
 first lifecycle smoke test and inspect the agent with:
 
 ```sh
-launchctl print "gui/$(id -u)/<declared-label>"
+launchctl print "gui/$(id -u)/org.nix-community.home.vroca"
 tts status
 tts say "macOS socket smoke test"
 ```

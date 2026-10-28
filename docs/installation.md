@@ -92,8 +92,25 @@ existing Home Manager module receiving `inputs`:
 }
 ```
 
-The opt-in Home Manager service module is a separate implementation step.
-Package installation starts no service.
+For login startup, import the reusable module instead:
+
+```nix
+{ inputs, ... }: {
+  imports = [ inputs.vroca.homeModules.default ];
+  services.vroca.enable = true;
+}
+```
+
+The module builds Vroca with the consuming configuration's `pkgs` and adds it
+to `home.packages`. `services.vroca.package` can override the package, for
+example with the flake's pinned package. Activation uses the existing Home
+Manager workflow; no activation is performed by this repository's build.
+Changes to `~/dev/nix-config` require separate approval.
+
+The service installs only when enabled and starts only the daemon. Linux panel
+and overlay commands are included but are not started automatically.
+When adopting the module, replace an existing `tts` service declaration rather
+than keeping two definitions of the same unit.
 
 ## Using The Overlay Or callPackage
 
@@ -113,26 +130,51 @@ equivalent conventional package expression is:
 pkgs.callPackage (vrocaSource + "/nix/package.nix") { }
 ```
 
-`vrocaSource` may be the local Git flake input. Existing flake outputs `tts`, `tts-daemon`,
+`vrocaSource` may be the local Git flake input. No overlay is required to use
+the Home Manager module. Existing flake outputs `tts`, `tts-daemon`,
 `tts-pitch-tables`, and Linux-only `tts-panel`/`tts-overlay` remain available.
 The default output now contains the command bundle rather than just the daemon.
 
-## Runtime And Client Behavior
+## Service And Runtime Behavior
 
-On Mac, the daemon and client honor a supplied `XDG_RUNTIME_DIR`; otherwise
-they share `~/Library/Caches/vroca`. The daemon creates that directory with
-mode `0700`; wrappers reject symlinks, non-directories, and foreign ownership.
-This environment applies only to Vroca, not to the global session.
+Approved packaging choices, 2026-10-28:
 
-The CLI forwards all command arguments and waits up to 65 seconds for a reply
-after submitting a request. This preserves responses during synchronous
-synthesis instead of using socat's half-second default. `tts quit` shuts down
-the daemon; use `tts stop` to stop only speech.
+| Behavior | Linux | Apple Silicon macOS |
+| --- | --- | --- |
+| Service | systemd user unit `tts`, attached to the graphical session | Home Manager LaunchAgent `org.nix-community.home.vroca`, in the GUI session |
+| Runtime | Existing `$XDG_RUNTIME_DIR`; legacy `/tmp` fallback when unset | `$XDG_RUNTIME_DIR` if supplied, otherwise `~/Library/Caches/vroca` |
+| Logs | `tts log` follows the service journal | `tts log` follows `~/Library/Logs/vroca.log` |
+| Restart | On failure, after 3 seconds | On unsuccessful exit, throttled to 3 seconds |
+| `tts quit` | Clean shutdown; service stays stopped | Clean shutdown; agent stays stopped |
 
-For an independently configured service, `tts log` follows the journal on
-Linux and `~/Library/Logs/vroca.log` on Mac. Package installation does not set
-up logging or start a supervisor. Provider credentials remain outside Nix
-expressions and the store.
+The Mac daemon creates its runtime directory with mode `0700`; wrappers reject
+a symlink, non-directory, or directory owned by another user. The client never
+creates a runtime directory or auto-starts the daemon. Runtime selection applies
+only to Vroca processes, not the global session environment. Explicit runtime
+paths must be short enough for Unix sockets (macOS limits are especially tight).
+
+Use the service manager to restart after `quit`:
+
+```sh
+# Linux
+systemctl --user start tts
+
+# Mac, when the Home Manager agent has been activated
+launchctl kickstart "gui/$(id -u)/org.nix-community.home.vroca"
+```
+
+Use `tts stop` to stop speech while leaving the daemon available.
+
+The client forwards every command's arguments and waits up to 65 seconds after
+submission for the daemon's reply, allowing synchronous synthesis and the
+HTTP engine's existing timeout. Long commands no longer lose their reply to
+`socat`'s default half-second wait after stdin closes.
+
+Preferences retain their existing `$XDG_CONFIG_HOME/tts` location (normally
+`~/.config/tts`). Provider keys must remain outside Nix expressions and the
+store. The Linux service still reads the optional user-managed `tts/env` file;
+the Mac module does not source shell environment files. Local engines work
+without provider credentials.
 
 ## Checks
 
@@ -160,8 +202,27 @@ This uses temporary state, never reads the clipboard, and plays no audible
 sound. It verifies the actual package rather than a fake player. No sandbox
 relaxation or global Nix configuration change is required.
 
-Validation on 2026-10-28: the Apple Silicon bundle build, seven client
-tests, and native null-audio synthesis/control/cleanup test pass. Package and
-overlay interfaces evaluate for all three advertised platforms; Linux binaries
-were not built or run here. No profile, service, global Nix configuration, or
-deployment repository was changed. `flake.lock` is unchanged.
+The installed Nix version may warn that `homeModules` is an unknown flake
+output. It is the intentional Home Manager module export; the separate module
+evaluation below checks its option types and platform behavior.
+
+`tests/home-manager.nix` evaluates the module against real Home Manager option
+types for Linux and Mac, including the disabled case. Supply the source paths
+from the consuming configuration's inputs:
+
+```sh
+nix eval --json --file tests/home-manager.nix --apply \
+  'test: test { nixpkgs = /nix/store/<nixpkgs-source>; homeManager = /nix/store/<home-manager-source>; }'
+```
+
+See [`macos-compatibility.md`](macos-compatibility.md) for service activation,
+actual audio, clipboard, and later UI validation. A package build alone does
+not prove those human-operated flows.
+
+Validation on 2026-10-28: the Apple Silicon bundle build and seven packaged
+client tests pass. The native null-audio daemon test passes startup, model
+synthesis, voice catalogue/selection, speed, and graceful cleanup. Home Manager
+evaluations pass for Linux, Mac, and disabled cases; all three advertised
+platforms' package interfaces and the overlay evaluate. Linux binaries were not
+built or run on this Mac. No user service, profile, global Nix configuration,
+or deployment repository was changed; `flake.lock` is unchanged.

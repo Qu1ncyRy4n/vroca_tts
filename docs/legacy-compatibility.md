@@ -11,6 +11,12 @@ A difference between Python and the documentation is **not** automatically a
 Rust requirement. Each is resolved by a decision in `rust-spec.md` §6 or left
 Open in §7.
 
+The baseline tables preserve the original migration audit. The Python sweep
+is recorded in `handoff.md`; the 2026-10-28 Nix packaging change additionally
+fixes client argument forwarding (D5) and adds the Mac client/runtime and service
+interfaces documented in [`installation.md`](installation.md). These changes
+do not establish Rust parity.
+
 ## How To Use This Document
 
 Before a Rust command may be called compatible, it needs a fixture covering all
