@@ -59,7 +59,7 @@ in
             '';
         launchd.agents.vroca = {
           enable = true;
-          domain = "gui";
+          # Home Manager installs enabled agents in gui/$UID.
           config = {
             ProgramArguments = [ "${cfg.package}/bin/tts-daemon" ];
             RunAtLoad = true;

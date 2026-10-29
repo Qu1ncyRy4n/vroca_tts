@@ -31,7 +31,7 @@ assert linux.systemd.user.services.tts.Install.WantedBy == [ "graphical-session.
 assert !(linux.launchd.agents ? vroca);
 assert builtins.elem linux.services.vroca.package linux.home.packages;
 assert mac.launchd.agents.vroca.enable;
-assert mac.launchd.agents.vroca.domain == "gui";
+assert mac.launchd.agents.vroca.config.Label == "org.nix-community.home.vroca";
 assert
   mac.launchd.agents.vroca.config.ProgramArguments
   == [ "${mac.services.vroca.package}/bin/tts-daemon" ];
