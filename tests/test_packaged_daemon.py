@@ -54,6 +54,16 @@ class PackagedDaemonTests(unittest.TestCase):
                     self.assertEqual(snapshot["engine"], "kokoro")
                     self.assertTrue(snapshot["player_alive"])
                     self.assertEqual(stat.S_IMODE(runtime.stat().st_mode), 0o700)
+                    socket_inode = (runtime / "tts.sock").stat().st_ino
+                    duplicate = subprocess.run(
+                        [str(BIN / "tts-daemon")], env=env,
+                        capture_output=True, text=True, timeout=20,
+                    )
+                    self.assertNotEqual(duplicate.returncode, 0)
+                    self.assertIn("already owned by a live daemon", duplicate.stderr)
+                    self.assertEqual((runtime / "tts.sock").stat().st_ino, socket_inode)
+                    self.assertIsNone(process.poll())
+                    self.assertTrue(json.loads(command("status"))["player_alive"])
                     catalogue = json.loads(command("catalogue"))
                     self.assertEqual(len(catalogue), 54)
                     self.assertEqual(catalogue[53]["id"], "em_santa")

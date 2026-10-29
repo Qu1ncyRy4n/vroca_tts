@@ -1096,6 +1096,12 @@ def _socket_owner_live(path):
 
 
 def main():
+    # Refuse duplicates before loading models or registering cleanup. A losing
+    # instance must never unlink the live owner's public socket or snapshot.
+    if _socket_owner_live(SOCK):
+        print("tts.sock is already owned by a live daemon; refusing to start",
+              file=sys.stderr)
+        sys.exit(1)
     model_dirs = json.loads(os.environ["TTS_MODEL_DIRS"])
     threads = int(os.environ.get("TTS_THREADS", "4"))
     prefs = load_prefs()
@@ -1108,13 +1114,16 @@ def main():
     reader.tts = build_engine(engine, model_dirs, threads,
                               reader._recognizer_or_none())
 
+    owns_socket = False
+
     def _cleanup():
         """Graceful-exit cleanup (N2, N3, D9).
 
         The old exit paths left all of it behind: quit skipped unlink and
         tmpdir removal, a crash left mpv alive, and the leaked snapshot was
         indistinguishable from a live one."""
-        for path in (SOCK, reader.mpv.sock_path, STATE):
+        shared_paths = (SOCK, STATE) if owns_socket else ()
+        for path in (reader.mpv.sock_path, *shared_paths):
             try:
                 os.unlink(path)
             except OSError:
@@ -1151,6 +1160,7 @@ def main():
         pass
     srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     srv.bind(SOCK)
+    owns_socket = True
     try:
         os.chmod(SOCK, 0o666)
     except OSError:
