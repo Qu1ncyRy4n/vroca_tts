@@ -46,6 +46,16 @@ evaluations pass for Linux, Mac, and disabled configurations. Linux package
 interfaces are evaluated; Linux builds/runtime checks, actual Mac audio and
 clipboard, and service activation remain unverified. No Rust tests were run.
 
+## Open TODOs
+
+- [ ] **Consider `vroca` as the public CLI name** (`todo:lonut-bovot`, proposed
+  2026-10-29). `tts` is too generic. Before implementation, approve the command
+  shape and decide whether to retain `tts` as a compatibility alias and whether
+  daemon/panel/overlay names also change. Inventory Python and Rust entry
+  points, Nix outputs/wrappers, service commands, Hammerspoon/Linux bindings,
+  tests, and documentation; migrate consumers together. Current commands remain
+  unchanged while this is a proposal.
+
 ---
 
 ## Where We Are

@@ -138,3 +138,15 @@ Decision involvement is **interface**: installation commands, service behavior,
 API/CLI shape, and UI behavior require developer approval. Implementation
 details are delegated. Global Nix configuration, user profiles, and active
 services were not changed.
+
+## CLI Naming TODO — 2026-10-29
+
+The developer proposed replacing the generic public command `tts` with
+`vroca`. Track this in Todo Ledger as `todo:lonut-bovot` and in
+[roadmap.md](roadmap.md#open-todos). This is planning work; no command has been
+renamed. Approve the CLI shape, legacy-alias policy, and scope of companion
+command names before changing implementation or deployment bindings.
+
+The deployment repository already uses the local Git input and contains the
+Mac service/hotkey wiring in commit `a3f9cc5`. No additional deployment edit or
+activation was performed for this TODO update.
