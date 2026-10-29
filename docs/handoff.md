@@ -220,10 +220,13 @@ committed locally; no deployment was activated. Start at
 [`pickup_notes.md`](pickup_notes.md) for the implementation map, exact checks,
 remaining Mac validation, and Git state.
 
-The active sequence is now owned by [`roadmap.md`](roadmap.md): easy Nix
-installation, Mac daemon/client support, Rust review before substantial Mac UI
-work, then the Mac UI and Hammerspoon integration. Interface decisions require
-developer approval. The Mac UI's controls/subtitle/RSVP scope is still open.
+The active sequence is owned by [`roadmap.md`](roadmap.md). On 2026-10-29 the
+developer approved the bounded GTK controls/status port for Mac rather than a
+new Rust GUI. That port and a packaged Hammerspoon module are implemented;
+Option bindings are approved; active deployment and human verification remain
+pending. Full Rust
+spec review remains required before accepting migration stages. Interface
+decisions require developer approval.
 
 The items below retain the earlier handoff's backlog context; they are not a
 competing priority order.

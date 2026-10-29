@@ -20,10 +20,15 @@
         {
           inherit vroca;
           default = vroca;
-          inherit (vroca) tts tts-daemon tts-pitch-tables;
+          inherit (vroca)
+            tts
+            tts-daemon
+            tts-panel
+            tts-pitch-tables
+            ;
         }
         // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-          inherit (vroca) tts-overlay tts-panel;
+          inherit (vroca) tts-overlay;
         };
     in
     {
@@ -46,6 +51,7 @@
             python3
             lib
             stdenv
+            lua
             ;
           inherit (self.packages.${system}) vroca;
         }
@@ -56,25 +62,22 @@
         let
           pkgs = nixpkgs.legacyPackages.${system};
           isLinux = pkgs.stdenv.hostPlatform.isLinux;
-          pyEnv = pkgs.python3.withPackages (
-            ps:
-            [
-              ps.sherpa-onnx
-              ps.numpy
-            ]
-            ++ nixpkgs.lib.optionals isLinux [
-              ps.pygobject3
-              ps.pycairo
-            ]
-          );
+          pyEnv = pkgs.python3.withPackages (ps: [
+            ps.sherpa-onnx
+            ps.numpy
+            ps.pygobject3
+            ps.pycairo
+          ]);
         in
         {
           default = pkgs.mkShell {
+            GI_TYPELIB_PATH = self.packages.${system}.vroca.tts-panel.typelibs;
             packages = [
               pyEnv
               pkgs.uv
               pkgs.mpv
               pkgs.socat
+              pkgs.gtk4
 
               # Rust stays on nixpkgs' stable toolchain; no nightly or extra input
               # is needed for the staged replacement in rust_impl/.
@@ -84,12 +87,9 @@
               pkgs.clippy
               pkgs.rust-analyzer
             ]
-            # systemd and the GTK layer-shell stack are Linux-only. Keeping
-            # them out of the Darwin shell also keeps Mac CLI work independent
-            # of the future Mac UI toolkit.
+            # Only the overlay and user-unit tools require Linux.
             ++ nixpkgs.lib.optionals isLinux [
               pkgs.systemd
-              pkgs.gtk4
               pkgs.gtk4-layer-shell
             ];
           };

@@ -9,6 +9,7 @@
   fetchurl,
   runCommand,
   writeShellApplication,
+  writeText,
   python3,
   mpv,
   socat,
@@ -120,16 +121,18 @@ let
   # library the GUIs touch has to be listed -- gtk4 pulls pango/gdk-pixbuf/
   # graphene in as separate typelibs. makeSearchPathOutput, not makeSearchPath:
   # pango's default output isn't `out` and the typelibs live there.
-  gtkTypelibs = lib.makeSearchPathOutput "out" "lib/girepository-1.0" ([
-    gtk4
-    gtk4-layer-shell
-    glib
-    pango
-    gdk-pixbuf
-    graphene
-    harfbuzz
-    gobject-introspection # ships cairo-1.0.typelib, which gtk4 needs
-  ]);
+  gtkTypelibs = lib.makeSearchPathOutput "out" "lib/girepository-1.0" (
+    [
+      gtk4
+      glib
+      pango
+      gdk-pixbuf
+      graphene
+      harfbuzz
+      gobject-introspection # ships cairo-1.0.typelib, which gtk4 needs
+    ]
+    ++ lib.optionals isLinux [ gtk4-layer-shell ]
+  );
 
   runtimeDeps = [
     mpv
@@ -184,9 +187,10 @@ let
     '';
   };
 
-  # Config panel (Super+Shift+Z). Plain toplevel, so no layer-shell preload.
+  # Plain toplevel on both platforms, so no layer-shell preload.
   panel = writeShellApplication {
     name = "tts-panel";
+    passthru.typelibs = gtkTypelibs;
     runtimeInputs = [
       (python3.withPackages (
         ps: with ps; [
@@ -194,14 +198,43 @@ let
           pycairo
         ]
       ))
-      systemd # panel starts the unit itself if the socket is missing
-    ];
+    ]
+    ++ lib.optionals isLinux [ systemd ]; # Linux can start its user unit.
     text = ''
+      ${runtime.environment}
       export GI_TYPELIB_PATH=${gtkTypelibs}
       export PYTHONPATH=${src}
       exec python3 ${src}/panel.py
     '';
   };
+
+  macApp = runCommand "vroca-mac-app" { } ''
+    app="$out/Applications/Vroca.app/Contents"
+    mkdir -p "$app/MacOS"
+    ln -s ${panel}/bin/tts-panel "$app/MacOS/Vroca"
+    cat > "$app/Info.plist" <<'PLIST'
+    <?xml version="1.0" encoding="UTF-8"?>
+    <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+    <plist version="1.0"><dict>
+      <key>CFBundleExecutable</key><string>Vroca</string>
+      <key>CFBundleIdentifier</key><string>dev.qix.ttspanel</string>
+      <key>CFBundleName</key><string>Vroca</string>
+      <key>CFBundlePackageType</key><string>APPL</string>
+      <key>CFBundleVersion</key><string>1</string>
+      <key>NSHighResolutionCapable</key><true/>
+    </dict></plist>
+    PLIST
+  '';
+
+  hammerspoonLua = writeText "vroca.lua" (
+    lib.replaceStrings [ "@TTS@" "@APP@" ] [ "${ttsctl}/bin/tts" "${macApp}/Applications/Vroca.app" ] (
+      builtins.readFile ../integrations/hammerspoon/vroca.lua
+    )
+  );
+  hammerspoon = runCommand "vroca-hammerspoon" { } ''
+    mkdir -p "$out/share/vroca/hammerspoon"
+    cp ${hammerspoonLua} "$out/share/vroca/hammerspoon/vroca.lua"
+  '';
 
   # One client for every binding. socat rather than a second python start-up:
   # a keypress should not pay interpreter boot time.
@@ -236,20 +269,26 @@ buildEnv {
   paths = [
     daemon
     ttsctl
-  ]
-  ++ lib.optionals isLinux [
-    overlay
     panel
+  ]
+  ++ lib.optionals isLinux [ overlay ]
+  ++ lib.optionals isDarwin [
+    macApp
+    hammerspoon
   ];
-  pathsToLink = [ "/bin" ];
+  pathsToLink = [
+    "/bin"
+    "/Applications"
+    "/share"
+  ];
   passthru = {
     tts-daemon = daemon;
     tts = ttsctl;
+    tts-panel = panel;
     tts-pitch-tables = pitchTables;
   }
   // lib.optionalAttrs isLinux {
     tts-overlay = overlay;
-    tts-panel = panel;
   };
   meta = {
     description = "Speech synthesis and assistive reader";

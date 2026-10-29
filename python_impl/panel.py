@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""TTS config panel -- Super+Shift+Z.
+"""GTK speech controls on Linux and macOS.
 
 A GTK4 control panel to configure speech engine, voice, aligner, overlay mode,
-font size, context window, screen positioning, and queue actions.
+font size, context window, screen positioning, and queue actions. Mac windows
+omit the Linux overlay settings; Hammerspoon owns global Mac shortcuts.
 """
 import json
 import os
@@ -10,6 +11,7 @@ import socket
 import sys
 import tempfile
 import time
+from concurrent.futures import ThreadPoolExecutor
 
 import gi
 
@@ -22,6 +24,7 @@ MODE_FILE = os.path.join(RUNTIME, "tts-mode")
 MODES = ["subtitle", "rsvp", "scroll_rsvp", "off"]
 ALIGNERS = ["asr", "energy"]
 POSITIONS = ["bottom", "top", "center"]
+IS_MAC = sys.platform == "darwin"
 
 
 def _label_factory():
@@ -96,17 +99,16 @@ scale value { color: #9aa0a6; font-size: 9pt; }
 
 def send(cmd, timeout=3.0):
     try:
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(timeout)
-        s.connect(SOCK)
-        s.sendall(cmd.encode())
-        out = b""
-        while True:
-            chunk = s.recv(4096)
-            if not chunk:
-                break
-            out += chunk
-        s.close()
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as s:
+            s.settimeout(timeout)
+            s.connect(SOCK)
+            s.sendall(cmd.encode())
+            out = b""
+            while True:
+                chunk = s.recv(4096)
+                if not chunk:
+                    break
+                out += chunk
         return out.decode()
     except OSError:
         return None
@@ -115,9 +117,40 @@ def send(cmd, timeout=3.0):
 class Panel(Gtk.Application):
     def __init__(self):
         super().__init__(application_id="dev.qix.ttspanel")
+        # Model loading and synthesis can take seconds. Keep socket waits off
+        # GTK's thread, serialize commands, and allow only one pending poll.
+        self._worker = ThreadPoolExecutor(max_workers=1)
+        self._polling = False
+        self._catalogue_pending = False
+        self._closed = False
+        self._timer = None
+
+    def do_shutdown(self):
+        self._closed = True
+        if self._timer is not None:
+            GLib.source_remove(self._timer)
+        self._worker.shutdown(wait=False, cancel_futures=True)
+        Gtk.Application.do_shutdown(self)
+
+    def _request(self, cmd, timeout=3.0, done=None):
+        future = self._worker.submit(send, cmd, timeout)
+
+        def complete():
+            if not self._closed and done is not None:
+                done(future.result())
+            return False
+
+        future.add_done_callback(lambda _: GLib.idle_add(complete))
 
     def do_activate(self):
+        if self.get_active_window() is not None:
+            self.get_active_window().present()
+            return
         win = Gtk.ApplicationWindow(application=self, title="Vroca Text-to-Speech")
+        if IS_MAC:
+            header = Gtk.HeaderBar()
+            header.set_property("use-native-controls", True)
+            win.set_titlebar(header)
         win.set_default_size(460, 780)
         root = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12,
                        margin_top=16, margin_bottom=16,
@@ -140,7 +173,7 @@ class Panel(Gtk.Application):
         self.speed.set_draw_value(True)
         self.speed.set_value(1.0)
         self.speed.connect("value-changed",
-                           lambda w: send(f"speed {w.get_value():.2f}"))
+                           lambda w: self._send_if_user(f"speed {w.get_value():.2f}"))
         srow.append(self.speed)
         root.append(srow)
 
@@ -207,6 +240,7 @@ class Panel(Gtk.Application):
         self.aligner.connect("notify::selected", self._set_aligner)
         arow.append(self.aligner)
         root.append(arow)
+        arow.set_visible(not IS_MAC)
 
         mrow = Gtk.Box(spacing=10)
         mrow.append(Gtk.Label(label="Overlay Mode"))
@@ -215,6 +249,7 @@ class Panel(Gtk.Application):
         self.mode.connect("notify::selected", self._set_mode)
         mrow.append(self.mode)
         root.append(mrow)
+        mrow.set_visible(not IS_MAC)
 
         prow = Gtk.Box(spacing=10)
         prow.append(Gtk.Label(label="Position"))
@@ -223,6 +258,7 @@ class Panel(Gtk.Application):
         self.position.connect("notify::selected", self._set_position)
         prow.append(self.position)
         root.append(prow)
+        prow.set_visible(not IS_MAC)
 
         fsrow = Gtk.Box(spacing=10)
         fsrow.append(Gtk.Label(label="RSVP Font Size"))
@@ -233,9 +269,10 @@ class Panel(Gtk.Application):
         self.font_size.set_draw_value(True)
         self.font_size.set_value(24)
         self.font_size.connect("value-changed",
-                               lambda w: send(f"font_size {int(w.get_value())}"))
+                               lambda w: self._send_if_user(f"font_size {int(w.get_value())}"))
         fsrow.append(self.font_size)
         root.append(fsrow)
+        fsrow.set_visible(not IS_MAC)
 
         wvrow = Gtk.Box(spacing=10)
         wvrow.append(Gtk.Label(label="Scroll Context Words"))
@@ -245,11 +282,20 @@ class Panel(Gtk.Application):
         self.words_vis.set_draw_value(True)
         self.words_vis.set_value(3)
         self.words_vis.connect("value-changed",
-                               lambda w: send(f"words_visible {int(w.get_value())}"))
+                               lambda w: self._send_if_user(f"words_visible {int(w.get_value())}"))
         wvrow.append(self.words_vis)
         root.append(wvrow)
+        wvrow.set_visible(not IS_MAC)
 
         root.append(Gtk.Separator())
+
+        playback = Gtk.Box(spacing=8, homogeneous=True)
+        for label, cmd in (("Read clipboard", "read"), ("Pause / Resume", "toggle"),
+                           ("Previous", "back"), ("Next", "next")):
+            b = Gtk.Button(label=label)
+            b.connect("clicked", self._run, cmd)
+            playback.append(b)
+        root.append(playback)
 
         qrow = Gtk.Box(spacing=8, homogeneous=True)
         for label, cmd in (("Skip Item", "skip"), ("Clear Queue", "clear"), ("Reset Defaults", "reset")):
@@ -273,7 +319,7 @@ class Panel(Gtk.Application):
         win.set_child(root)
 
         css = Gtk.CssProvider()
-        css.load_from_data(CSS)
+        css.load_from_string(CSS.decode())
         Gtk.StyleContext.add_provider_for_display(
             win.get_display(), css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
@@ -285,7 +331,7 @@ class Panel(Gtk.Application):
         self.win = win
         self._syncing = False
         self._refresh()
-        GLib.timeout_add(400, self._refresh)
+        self._timer = GLib.timeout_add(400, self._refresh)
         win.present()
 
     def _send_if_user(self, cmd):
@@ -294,14 +340,14 @@ class Panel(Gtk.Application):
         echo the value straight back and fight anything set elsewhere."""
         if getattr(self, "_syncing", True):
             return
-        send(cmd)
+        self._request(cmd)
 
     def _set_mode(self, *_):
         if self._syncing:
             return
         # N14: the daemon owns the mode file. This used to write it directly,
         # racing the daemon's own cycle_mode with no atomicity.
-        send(f"mode_set {MODES[self.mode.get_selected()]}")
+        self._request(f"mode_set {MODES[self.mode.get_selected()]}")
 
     def _match(self, item):
         q = self.search.get_text().strip().lower()
@@ -326,44 +372,55 @@ class Panel(Gtk.Application):
     def _use_voice(self, _btn):
         sid = self._selected_sid()
         if sid is not None:
-            send(f"voice {sid}", timeout=30)
+            self._request(f"voice {sid}", timeout=30)
 
     def _preview(self, _btn):
         sid = self._selected_sid()
         if sid is not None:
             self.stat.set_text(f"previewing voice {sid}…")
-            send(f"preview {sid}", timeout=30)
+            self._request(f"preview {sid}", timeout=30)
 
     def _set_engine(self, *_):
         if self._syncing:
             return
         name = self.engine_names[self.engine.get_selected()]
         self.stat.set_text(f"switching to {name}…")
-        r = send(f"engine {name}", timeout=60)
-        self.catalogue = []
-        if r:
-            self.stat.set_text(r)
+        def switched(reply):
+            self.catalogue = []
+            if reply:
+                self.stat.set_text(reply)
+        self._request(f"engine {name}", timeout=60, done=switched)
 
     def _set_aligner(self, *_):
         if self._syncing:
             return
-        send(f"aligner {ALIGNERS[self.aligner.get_selected()]}", timeout=10)
+        self._request(f"aligner {ALIGNERS[self.aligner.get_selected()]}", timeout=10)
 
     def _set_position(self, *_):
         if self._syncing:
             return
-        send(f"position {POSITIONS[self.position.get_selected()]}", timeout=10)
+        self._request(f"position {POSITIONS[self.position.get_selected()]}", timeout=10)
 
     def _run(self, _btn, cmd):
-        r = send(cmd, timeout=30 if cmd == "reload" else 3)
-        if cmd == "quit":
-            self.win.close()
-        elif r:
-            self.stat.set_text(r)
+        def completed(reply):
+            if cmd == "quit" and reply is not None:
+                self.win.close()
+            elif reply:
+                self.stat.set_text(reply)
+        self._request(cmd, timeout=60, done=completed)
 
     def _refresh(self):
-        raw = send("status", timeout=0.5)
+        if not self._polling:
+            self._polling = True
+            self._request("status", timeout=0.5, done=self._update_status)
+        return True
+
+    def _update_status(self, raw):
+        self._polling = False
         if raw is None:
+            if IS_MAC:
+                self.stat.set_text("Daemon unavailable. Start tts-daemon or the Vroca login service.\nSee tts log for service logs.")
+                return
             # D6: the old one-shot latch recorded a single start attempt and
             # could stick on "starting" forever. Retry every 3 s instead; once
             # it has clearly failed to come up, say so instead of pretending.
@@ -400,10 +457,16 @@ class Panel(Gtk.Application):
             head += f"\nmodel {model}\n\n{st['sentence']}"
         else:
             head = f"idle{qstr}\nmodel {model}"
+        head += f"\n{st.get('engine', 'kokoro')} · voice {st.get('voice', 0)}"
         ev = st.get("effective_volume")
         if ev is not None and ev != 100:
             head += f"\nvolume {ev}"
         self.stat.set_text(head)
+
+        engine = st.get("engine")
+        if engine != getattr(self, "_catalogue_engine", None):
+            self._catalogue_engine = engine
+            self.catalogue = []
 
         self._syncing = True
         if abs(self.speed.get_value() - st["speed"]) > 0.01:
@@ -443,18 +506,9 @@ class Panel(Gtk.Application):
         # populated its voice list, even after the model came back. Fetch when
         # the model is loaded and the list is empty; keep the last list while
         # unloaded rather than blanking it.
-        if st.get("loaded") and not self.catalogue:
-            raw = send("catalogue", timeout=10)
-            try:
-                self.catalogue = json.loads(raw) if raw else []
-            except ValueError:
-                self.catalogue = []
-            if self.catalogue:
-                self.n_voices = len(self.catalogue)
-                self.store.splice(0, self.store.get_n_items(), [
-                    f"{v['sid']}  {v['name']}  ·  {v['lang']}  {v['gender']}"
-                    for v in self.catalogue])
-                self._refilter()
+        if st.get("loaded") and not self.catalogue and not self._catalogue_pending:
+            self._catalogue_pending = True
+            self._request("catalogue", timeout=10, done=self._update_catalogue)
         try:
             with open(MODE_FILE) as f:
                 cur = f.read().strip()
@@ -463,7 +517,19 @@ class Panel(Gtk.Application):
         except OSError:
             pass
         self._syncing = False
-        return True
+
+    def _update_catalogue(self, raw):
+        self._catalogue_pending = False
+        try:
+            self.catalogue = json.loads(raw) if raw else []
+        except ValueError:
+            self.catalogue = []
+        if self.catalogue:
+            self.n_voices = len(self.catalogue)
+            self.store.splice(0, self.store.get_n_items(), [
+                f"{v['sid']}  {v['name']}  ·  {v['lang']}  {v['gender']}"
+                for v in self.catalogue])
+            self._refilter()
 
 
 if __name__ == "__main__":

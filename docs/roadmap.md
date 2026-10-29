@@ -4,7 +4,7 @@ Where the project is and what happens next. [`rust-spec.md`](rust-spec.md) owns
 Rust behavior and migration decisions; this document records current priority
 direction and sequencing.
 
-Last updated 2026-10-28.
+Last updated 2026-10-29.
 
 ## Active Plan — Nix Installation, Mac Support, Then Rust
 
@@ -16,8 +16,8 @@ a UI; global hotkeys are handled through Hammerspoon configuration.
 | --- | --- | --- |
 | 1 | Easy Nix installation | Implemented: combined package, install/run guide, overlay, and opt-in Home Manager service. Mac build/checks pass; Linux interfaces evaluate, with native builds still to verify. |
 | 2 | Mac daemon and CLI | Bundle and null-audio synthesis/control/cleanup checks pass. Real audio, clipboard, duplicate startup/stale sockets, and activated service lifecycle remain to verify. |
-| 3 | Rust review and continuation | Pending: audit against `rust-spec.md`, settle scope and blocking decisions, then resume bounded slices before substantial Mac UI code. |
-| 4 | Mac UI and Hammerspoon | Pending: agree UI scope/behavior and bindings, implement through the daemon interface, and verify human-operated flows on Mac. |
+| 3 | Mac UI and Hammerspoon | Approved bounded GTK controls/status port implemented with a Mac app bundle; native fake-daemon UI test and mocked Hammerspoon tests pass. Option bindings approved; active setup and human verification remain. |
+| 4 | Rust review and continuation | Scaffold inspected to inform the GTK choice; full `rust-spec.md` audit, scope decisions, and bounded replacement slices remain pending. |
 
 This sequence keeps Rust close while establishing a usable packaging boundary.
 Do not require full Python Mac UI parity before beginning the Rust review.
@@ -31,8 +31,10 @@ implementation choices are delegated. Commit only when asked.
 The packaging interfaces were approved and implemented: conventional
 `callPackage`, combined bundle with the existing model set, an overlay, and an
 opt-in Home Manager module. Mac runtime, `quit`, and logging choices are recorded
-in [`installation.md`](installation.md). UI scope (including subtitles/RSVP)
-and toolkit remain open. The Home Manager module is reusable repository code;
+in [`installation.md`](installation.md). The first Mac UI ports the existing
+GTK controls/status panel; subtitles/RSVP remain outside that port. Hammerspoon
+bindings match Linux/Speechify with Option replacing Super. The Home Manager
+module is reusable repository code;
 installing or activating it in `~/dev/nix-config` still requires separate
 approval. The package and service milestones are committed; see
 [`pickup_notes.md`](pickup_notes.md) for the restart checklist and Git state.
@@ -293,13 +295,14 @@ endpoint is the practical path on this hardware.
 **Packaging implemented; not deployed.** [`macos-compatibility.md`](macos-compatibility.md)
 defines Apple Silicon daemon/client and UI milestones. The package remains owned by
 this flake; a Home Manager LaunchAgent belongs in the separately owned
-`~/dev/nix-config` only after approval. Linux GTK overlay/panel packages remain
-Linux-only. The Mac UI scope is open; Hammerspoon owns global hotkeys.
+`~/dev/nix-config` only after approval. The GTK panel now supports Mac; the
+layer-shell overlay remains Linux-only. Hammerspoon owns global hotkeys.
 
 The portable `tts` wrapper, shared Darwin runtime directory, logging behavior,
 and crash-only LaunchAgent policy are implemented in the package/module.
 Validation of the daemon and client on physical Apple Silicon hardware precedes
-deployment; Mac UI and Hammerspoon work follow the Rust review.
+deployment. The approved GTK port avoids a new UI implementation while the
+Rust review remains pending.
 
 ---
 

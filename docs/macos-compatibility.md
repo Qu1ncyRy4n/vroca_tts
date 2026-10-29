@@ -1,8 +1,9 @@
 # macOS Compatibility Plan
 
-Updated 2026-10-28. Approved direction: a working Apple Silicon release with
+Updated 2026-10-29. Approved direction: a working Apple Silicon release with
 a UI and Hammerspoon configuration for global hotkeys. The developer approves
-interface choices; UI scope and toolkit selection remain unresolved.
+interface choices. The first UI is the existing GTK controls/status panel,
+packaged as `tts-panel` and `Vroca.app`; subtitles/RSVP are outside this port.
 
 The target is a reproducibly packaged, per-user daemon on Apple Silicon
 macOS. The planned deployment is a Nix-built executable supervised by a
@@ -37,21 +38,26 @@ client, not a second runtime-state owner.
 
 ## Mac UI And Hammerspoon Milestone
 
-The Mac release must include a UI. Decide whether the initial UI contains only
-voice/playback/speed/volume controls and daemon status, also subtitles, or full
-RSVP overlays. No toolkit or native application packaging has been chosen.
-Present proposed UI behavior and a short manual verification path before
-implementation.
+The developer approved porting the existing GTK panel on 2026-10-29. It uses
+the existing Python daemon and command protocol, with voices, speed, volume,
+playback, and status. Mac windows hide aligner and Linux overlay controls.
+Model operations run off the GTK thread; a missing daemon produces an explicit
+unavailable message rather than a service-start attempt. The combined package
+includes `Applications/Vroca.app`; the individual `tts-panel` output provides
+the command. See [installation.md](installation.md#mac-panel-and-hotkeys) for
+launch commands, controls, and a short human verification path.
 
 Global hotkeys are supplied as Hammerspoon Lua configuration calling `tts`.
-Agree bindings and the installed executable path before implementation. Ship
-configuration and setup instructions here; changing the user's active
+The packaged module contains absolute Nix paths and binds no keys when loaded.
+The approved defaults match Linux/Speechify with Option replacing Super.
+They are enabled only by an explicit `setup()` call. Changing the user's active
 Hammerspoon configuration requires approval. Clipboard access, required macOS
 permissions, and focus behavior need verification on the target Mac.
 
-Review the Rust scaffold before substantial new UI work, so the UI language and
-toolkit decision can account for the imminent Rust replacement. Preserve the
-installed command names and daemon interface through migration.
+Inspection found empty Rust GUI binaries and a draft JSON client incompatible
+with the production Python command protocol. The approved bounded GTK port
+therefore reuses the working daemon; full Rust spec review remains pending.
+Preserve installed command names and daemon behavior through migration.
 
 ## Why LaunchAgent
 
@@ -92,10 +98,9 @@ environment setting or installer script is needed.
 
 ## Remaining Decisions
 
-1. Define UI scope, user-visible behavior, toolkit, and application launch
-   interface. UI is required; controls versus subtitles/RSVP is still open.
-2. Define Hammerspoon bindings and how its configuration finds the installed
-   `tts` executable. Verify its required permissions rather than adding a
+1. Select the active configuration's module path and approve activation.
+   The package supplies absolute paths to `tts` and `Vroca.app` internally.
+2. Verify its required permissions rather than adding a
    second hotkey helper.
 
 ## Implementation Sequence
@@ -107,14 +112,16 @@ environment setting or installer script is needed.
 | Mac package/client checks and native null-audio daemon test | Passed |
 | Opt-in Home Manager LaunchAgent and log-directory setup | Implemented and evaluated; not activated |
 | `pbpaste` tests and actual clipboard/audio use | Pending |
-| Duplicate startup, stale-socket recovery, login start, crash restart, and clean quit under launchd | Pending |
-| Rust scope/spec review before substantial UI code | Pending |
-| Mac UI and Hammerspoon configuration | Pending interface decisions and implementation |
+| Sequential duplicate startup preserves existing socket | Packaged regression test passes after cleanup ownership fix |
+| Concurrent startup, stale-socket recovery, login start, crash restart, and clean quit under launchd | Pending |
+| Rust scaffold inspection for toolkit choice | Done; full scope/spec audit remains pending |
+| Mac GTK controls/status panel and app bundle | Implemented; native fake-daemon GTK smoke test passes |
+| Packaged Hammerspoon module | Implemented; Option bindings approved; mocked API tests pass; activation pending |
 
 Next, validate audio and clipboard on the target Mac. After separate approval,
 enable the module in `~/dev/nix-config` and verify the activated lifecycle.
-Review Rust before substantial UI work, then implement and manually verify the
-approved controls, bindings, and any overlay behavior.
+Manually verify the panel, app focus, approved bindings, and real playback.
+Resume the Rust spec review without expanding this port into overlay parity.
 
 ## Validation
 
@@ -125,6 +132,7 @@ nix flake check --no-write-lock-file
 nix build --no-write-lock-file
 python3 tests/test_packaged_daemon.py ./result/bin
 nix develop --command python3 -m unittest python_impl/test_daemon.py
+nix develop --command python3 tests/test_panel.py
 ```
 
 The packaged-daemon check must run in the login session: AppKit initialization
@@ -153,3 +161,5 @@ decision is recorded.
 - [Apple launchd plist reference](https://www.manpagez.com/man/5/launchd.plist/)
 - [Apple NSPasteboard](https://developer.apple.com/documentation/AppKit/NSPasteboard)
 - [gtk4-layer-shell](https://github.com/wmww/gtk4-layer-shell/blob/main/README.md)
+- [GTK macOS backend and native window controls](https://docs.gtk.org/gtk4/osx.html)
+- [Hammerspoon asynchronous tasks](https://www.hammerspoon.org/docs/hs.task.html)

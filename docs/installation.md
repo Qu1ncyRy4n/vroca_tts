@@ -14,7 +14,7 @@ Python files directly from the mutable checkout.
 | Platform | Default package commands |
 | --- | --- |
 | `x86_64-linux`, `aarch64-linux` | `tts`, `tts-daemon`, `tts-panel`, `tts-overlay` |
-| `aarch64-darwin` | `tts`, `tts-daemon` |
+| `aarch64-darwin` | `tts`, `tts-daemon`, `tts-panel`; `Applications/Vroca.app` |
 
 The existing local model set is included: Kokoro, Supertonic, LibriTTS,
 ZipVoice/vocoder, and ASR. Model downloads are hash-pinned Nix build inputs;
@@ -23,8 +23,8 @@ substantial dependency and model closure and measures pitch for unnamed voices.
 Pitch measurement sources remain separate from daemon and GUI code so normal
 application edits do not repeat that work.
 
-Mac UI and Hammerspoon configuration remain follow-up work. The package does
-not install a Mac UI or register hotkeys. Intel macOS is not advertised.
+The Mac bundle also includes `share/vroca/hammerspoon/vroca.lua`. Loading the
+module binds no keys until explicitly configured. Intel macOS is not advertised.
 
 ### Kokoro Model Pin Review
 
@@ -132,7 +132,7 @@ pkgs.callPackage (vrocaSource + "/nix/package.nix") { }
 
 `vrocaSource` may be the local Git flake input. No overlay is required to use
 the Home Manager module. Existing flake outputs `tts`, `tts-daemon`,
-`tts-pitch-tables`, and Linux-only `tts-panel`/`tts-overlay` remain available.
+`tts-pitch-tables`, and `tts-panel` remain available; `tts-overlay` is Linux-only.
 The default output now contains the command bundle rather than just the daemon.
 
 ## Service And Runtime Behavior
@@ -165,6 +165,74 @@ launchctl kickstart "gui/$(id -u)/org.nix-community.home.vroca"
 
 Use `tts stop` to stop speech while leaving the daemon available.
 
+## Mac Panel And Hotkeys
+
+Build the default bundle, start the daemon in one terminal, then open the panel:
+
+```sh
+nix build
+./result/bin/tts-daemon
+# In another terminal:
+./result/bin/tts-panel
+# Or launch the Mac application:
+open ./result/Applications/Vroca.app
+```
+
+The panel shows daemon/model/playback status, engine and searchable voices,
+preview/selection, speed, master volume, voice trim, and playback/queue/model
+controls. On Mac, aligner and overlay/RSVP settings are hidden. Socket waits run
+off the UI thread. Closing the panel leaves the daemon running; **Quit daemon**
+stops both. When the daemon is unavailable, the panel says how to start it and
+keeps polling; it does not register or start a Mac service.
+
+**Read clipboard** uses the existing `read` command: when idle it reads the
+clipboard, and when speech is active it stops speech. **Pause / Resume** toggles
+pause; **Previous** and **Next** move between sentences. These controls preserve
+the existing daemon API, allowing a later Rust daemon to replace Python.
+
+For a manual check, copy a short paragraph, press Read clipboard, change speed
+and volume, pause/resume, and select/preview a voice. Changes made through `tts`
+should appear in the panel. Verify actual audio and clipboard behavior on the
+target Mac; automated GTK tests use a fake daemon.
+
+The Hammerspoon module uses Nix-substituted absolute paths, asynchronous
+`hs.task` calls for `tts`, and `hs.application.launchOrFocus` for the app. It
+does not depend on Hammerspoon inheriting the terminal's PATH. A reviewable
+example enables the developer-approved Linux/Speechify layout with Option
+replacing Super:
+
+```lua
+-- Replace this with the installed package/profile's share path.
+vroca = dofile(os.getenv("HOME") .. "/.nix-profile/share/vroca/hammerspoon/vroca.lua")
+vroca.setup()
+```
+
+| Shortcut | Action |
+| --- | --- |
+| Option+Z | Read clipboard / stop active speech |
+| Option+Shift+Z | Open or focus panel |
+| Option+X | Pause / resume |
+| Option+C / Option+V | Previous / next sentence |
+| Option+Shift+C / Option+Shift+V | Slower / faster |
+
+For a build-only trial, use the absolute checkout's
+`result/share/vroca/hammerspoon/vroca.lua` instead. Keep that result symlink
+until installed. `vroca.stop()` removes this module's bindings; `setup` first
+removes its previous bindings. Inspect existing shortcuts before enabling a
+table. `setup({})` enables no keys; a supplied binding table replaces the
+defaults. Hammerspoon needs macOS Accessibility permission for global hotkeys;
+follow its setup prompt. Grant no extra permissions solely for this module.
+See the official [task API](https://www.hammerspoon.org/docs/hs.task.html),
+[application API](https://www.hammerspoon.org/docs/hs.application.html), and
+[Hammerspoon setup](https://www.hammerspoon.org/go/).
+
+Installing the package does not edit active Hammerspoon configuration. Editing
+that configuration and activating the Home Manager service remain separate,
+explicitly approved machine changes. Home Manager can expose the bundle through
+its normal macOS application linking; no `/Applications` installer is supplied.
+
+## Client And Preferences
+
 The client forwards every command's arguments and waits up to 65 seconds after
 submission for the daemon's reply, allowing synchronous synthesis and the
 HTTP engine's existing timeout. Long commands no longer lose their reply to
@@ -196,11 +264,28 @@ aborts in the build sandbox. Run the same daemon test in the logged-in session:
 ```sh
 nix build
 python3 tests/test_packaged_daemon.py ./result/bin
+nix develop --command python3 tests/test_panel.py
 ```
 
 This uses temporary state, never reads the clipboard, and plays no audible
 sound. It verifies the actual package rather than a fake player. No sandbox
 relaxation or global Nix configuration change is required.
+
+The GTK smoke test requires a graphical login session and briefly opens a test
+window. It checks control commands, voice filtering, read-only status refresh,
+responsiveness during delayed preview, and the Mac unavailable state using an
+isolated fake daemon. Flake checks also test the packaged Hammerspoon module
+with mocked APIs; they do not register global keys. Human focus behavior,
+Accessibility permission, and app launch through Finder/Hammerspoon still need
+manual verification.
+
+Validation on 2026-10-29: the Mac app launches through `open` and remains
+running without startup errors. The native fake-daemon GTK test and packaged
+Hammerspoon tests pass. A duplicate-start cleanup bug discovered during this
+check was fixed: rejected instances now leave a live owner's socket and state
+alone. The packaged daemon regression test passes duplicate refusal, preserved
+socket inode/live status, synthesis, controls, and cleanup. This does not verify
+simultaneous startup or service-manager lifecycle.
 
 The installed Nix version may warn that `homeModules` is an unknown flake
 output. It is the intentional Home Manager module export; the separate module

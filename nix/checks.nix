@@ -4,6 +4,7 @@
   lib,
   stdenv,
   vroca,
+  lua,
 }:
 {
   # Building the bundle checks the real runtime/model closure and platform
@@ -19,6 +20,12 @@
         python3 ${../tests/test_packaged_client.py} ${vroca.tts}/bin/tts
         touch "$out"
       '';
+}
+// lib.optionalAttrs stdenv.hostPlatform.isDarwin {
+  hammerspoon = runCommand "vroca-hammerspoon-check" { nativeBuildInputs = [ lua ]; } ''
+    lua ${../tests/test_hammerspoon.lua} ${vroca}/share/vroca/hammerspoon/vroca.lua
+    touch "$out"
+  '';
 }
 // lib.optionalAttrs stdenv.hostPlatform.isLinux {
   # macOS mpv initializes AppKit even for null audio. Its runtime smoke test

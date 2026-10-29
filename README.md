@@ -26,13 +26,16 @@ nix build
 In another terminal, run `./result/bin/tts say "Hello from Vroca."`.
 For declarative installation and login startup, see
 [`docs/installation.md`](docs/installation.md). The package supports Linux and
-Apple Silicon macOS; Mac UI and Hammerspoon integration remain planned.
+Apple Silicon macOS. Run `./result/bin/tts-panel` for controls, or on Mac
+`open ./result/Applications/Vroca.app`. See the install guide for the packaged
+Hammerspoon module and optional hotkeys.
 
 ## Current Priorities
 
 The agreed order is easy Nix installation, working Apple Silicon macOS support,
 then the staged Rust replacement. Mac support includes a UI and Hammerspoon
-configuration for hotkeys; the UI scope and toolkit remain open.
+configuration for hotkeys. The approved first Mac GUI ports the existing GTK
+controls/status panel; subtitles and RSVP remain Linux-only.
 
 The flake exports the combined `vroca` package, individual Python packages and
 models, an overlay, and an opt-in Home Manager service module.
