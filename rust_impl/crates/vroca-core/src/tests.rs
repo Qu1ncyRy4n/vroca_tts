@@ -1,8 +1,14 @@
 #[cfg(test)]
-mod tests {
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
+mod cases {
     use crate::operations::{Operation, Replace, Scope};
     use crate::parser::parse_legacy;
-    use crate::schema::{EngineId, Position};
+    use crate::schema::Position;
     use crate::state::State;
 
     #[test]

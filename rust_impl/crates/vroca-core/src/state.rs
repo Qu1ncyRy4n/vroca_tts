@@ -129,7 +129,7 @@ impl State {
                 self.prefs.speed = (self.prefs.speed - 0.15).max(0.5);
             }
             Operation::SetSpeed { speed } => {
-                self.prefs.speed = speed.max(0.5).min(3.0);
+                self.prefs.speed = speed.clamp(0.5, 3.0);
             }
             Operation::SetVoiceNumeric { sid: _ } => {
                 // Numeric resolution would happen here, bumping generation
@@ -147,10 +147,10 @@ impl State {
                 self.prefs.aligner = name;
             }
             Operation::SetFontSize { size } => {
-                self.prefs.font_size = size.max(12).min(72);
+                self.prefs.font_size = size.clamp(12, 72);
             }
             Operation::SetWordsVisible { count } => {
-                self.prefs.words_visible = count.max(1).min(15);
+                self.prefs.words_visible = count.clamp(1, 15);
             }
             Operation::SetPosition { pos } => {
                 self.prefs.position = pos;

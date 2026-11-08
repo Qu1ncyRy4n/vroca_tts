@@ -64,7 +64,7 @@ pub fn parse_legacy(input: &str) -> Result<Operation, ProtocolError> {
             Ok(Operation::SetVoiceNumeric { sid: val })
         }
         "engine" => {
-            let id = EngineId::new(rest).map_err(|e| ProtocolError::invalid_argument(e))?;
+            let id = EngineId::new(rest).map_err(ProtocolError::invalid_argument)?;
             Ok(Operation::SetEngine { id })
         }
         "aligner" => Ok(Operation::SetAligner {

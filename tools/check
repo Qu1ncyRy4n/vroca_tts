@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+# tools/check — the gate: Rust formatting, lints, tests; Python syntax.
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+
+command -v cargo >/dev/null 2>&1 || { echo "cargo missing: run through 'nix develop -c tools/check'" >&2; exit 1; }
+
+(cd rust_impl && cargo fmt --check)
+(cd rust_impl && cargo clippy --workspace --all-targets --all-features -- -D warnings)
+(cd rust_impl && cargo test --workspace)
+python3 -m py_compile python_impl/*.py scripts/*.py tests/*.py
+git diff --check

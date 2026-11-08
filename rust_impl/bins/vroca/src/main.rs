@@ -141,6 +141,13 @@ fn map_command(cmd: Commands) -> Result<Option<Operation>, ProtocolError> {
     }
 }
 
+fn print_json<T: serde::Serialize>(value: &T) {
+    match serde_json::to_string_pretty(value) {
+        Ok(text) => println!("{text}"),
+        Err(e) => eprintln!("error: could not render reply: {e}"),
+    }
+}
+
 fn main() -> std::process::ExitCode {
     let cli = Cli::parse();
 
@@ -162,7 +169,7 @@ fn main() -> std::process::ExitCode {
         Ok(None) => return std::process::ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {}", e.message);
-            return std::process::ExitCode::FAILURE;
+            return std::process::ExitCode::from(e.exit_code());
         }
     };
 
@@ -176,26 +183,27 @@ fn main() -> std::process::ExitCode {
                 vroca_core::codec::Response::Ok => {}
                 vroca_core::codec::Response::String { data } => println!("{}", data),
                 vroca_core::codec::Response::Status { snapshot } => {
-                    println!("{}", serde_json::to_string_pretty(&snapshot).unwrap());
+                    print_json(&snapshot);
                 }
                 vroca_core::codec::Response::Catalogue { data } => {
-                    println!("{}", serde_json::to_string_pretty(&data).unwrap());
+                    print_json(&data);
                 }
                 vroca_core::codec::Response::Error { error } => {
                     eprintln!("error: {}", error.message);
-                    return std::process::ExitCode::FAILURE;
+                    return std::process::ExitCode::from(error.exit_code());
                 }
             }
             std::process::ExitCode::SUCCESS
         }
         Err(e) => {
             eprintln!("error: {}", e.message);
-            std::process::ExitCode::FAILURE
+            std::process::ExitCode::from(e.exit_code())
         }
     }
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
     use clap::Parser;

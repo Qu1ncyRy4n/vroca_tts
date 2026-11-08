@@ -84,6 +84,21 @@ pub enum ErrorCode {
     Timeout,
 }
 
+impl ErrorCode {
+    /// Stable process exit code for the CLI, so scripts and hotkey bindings can
+    /// tell a bad argument from a missing daemon. 1 is reserved for internal
+    /// and I/O failures. Pattern borrowed from omnichan `omni-core/src/error.rs`.
+    pub fn exit_code(&self) -> u8 {
+        match self {
+            ErrorCode::InvalidArgument | ErrorCode::InvalidRequest => 2,
+            ErrorCode::NotFound => 3,
+            ErrorCode::Unavailable => 4,
+            ErrorCode::Busy | ErrorCode::Timeout => 5,
+            ErrorCode::EngineFailure => 6,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProtocolError {
     pub code: ErrorCode,
@@ -91,6 +106,10 @@ pub struct ProtocolError {
 }
 
 impl ProtocolError {
+    pub fn exit_code(&self) -> u8 {
+        self.code.exit_code()
+    }
+
     pub fn invalid_argument(msg: impl Into<String>) -> Self {
         Self {
             code: ErrorCode::InvalidArgument,

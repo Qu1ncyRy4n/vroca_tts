@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# tools/fmt — apply Rust formatting.
+set -eu
+cd "$(git rev-parse --show-toplevel)/rust_impl"
+cargo fmt

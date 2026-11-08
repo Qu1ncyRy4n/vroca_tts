@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# tools/run — run the Rust `vroca` CLI with the given arguments.
+set -eu
+cd "$(git rev-parse --show-toplevel)/rust_impl"
+cargo run -q -p vroca -- "$@"

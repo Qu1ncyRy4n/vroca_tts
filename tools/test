@@ -1,0 +1,5 @@
+#!/usr/bin/env sh
+# tools/test — Rust tests only, faster than the gate.
+set -eu
+cd "$(git rev-parse --show-toplevel)/rust_impl"
+cargo test --workspace "$@"

@@ -10,7 +10,7 @@ pub enum Response {
         data: String,
     },
     Status {
-        snapshot: crate::schema::RuntimeSnapshot,
+        snapshot: Box<crate::schema::RuntimeSnapshot>,
     },
     Catalogue {
         data: serde_json::Value,

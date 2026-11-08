@@ -5,7 +5,7 @@ use std::os::unix::net::UnixStream;
 use std::path::Path;
 
 use vroca_core::codec::{decode_response, Response};
-use vroca_core::operations::{Operation, ProtocolError, Request};
+use vroca_core::operations::{Operation, ProtocolError};
 
 pub struct Client {
     socket_path: std::path::PathBuf,
@@ -62,6 +62,7 @@ impl Client {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
     use std::os::unix::net::UnixListener;

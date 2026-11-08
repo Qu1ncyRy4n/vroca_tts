@@ -1,0 +1,7 @@
+#!/usr/bin/env sh
+# tools/check-nix — evaluate the flake for every advertised system, then run
+# the native checks on this host (builds the bundle; slow).
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+nix flake check --no-write-lock-file --no-build --all-systems
+nix flake check --no-write-lock-file

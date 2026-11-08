@@ -4,3 +4,36 @@ members = [
     "bins/*"
 ]
 resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+# Every third-party dependency is declared once here, with its reason, so the
+# budget in crates/vroca-core/tests/dep_budget.rs is auditable in one place.
+[workspace.dependencies]
+serde = { version = "1.0", features = ["derive"] } # wire and prefs types
+serde_json = "1.0"                                 # the structured protocol and prefs.json
+crossbeam-channel = "0.5"                          # state-owner thread mailbox (DEC-4)
+clap = { version = "4.4", features = ["derive"] }  # CLI parsing (rust-spec.md DEC-5)
+tempfile = "3.10"                                  # tests only: isolated runtime dirs
+
+vroca-core = { path = "crates/vroca-core" }
+vroca-client = { path = "crates/vroca-client" }
+vroca-daemon = { path = "crates/vroca-daemon" }
+
+# ExocortexCent docs/03-standards.md lint set. Test modules opt out of the
+# unwrap/expect/panic rules locally.
+[workspace.lints.clippy]
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+as_conversions = "deny"
+unwrap_used = "deny"
+expect_used = "deny"
+indexing_slicing = "deny"
+
+[profile.release]
+lto = "thin"
+strip = true

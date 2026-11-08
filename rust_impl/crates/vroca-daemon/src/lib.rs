@@ -28,6 +28,7 @@ pub struct Daemon {
 
 enum Message {
     Request(Operation, Sender<Response>),
+    #[allow(dead_code)] // rust-review.md DEC-4: never constructed yet
     Shutdown,
 }
 
@@ -49,7 +50,8 @@ impl Daemon {
 
         let legacy_sock = self.config.runtime_dir.join("vroca.sock");
         let struct_sock = self.config.runtime_dir.join("vroca-v1.sock");
-        let mpv_sock = self.config.runtime_dir.join("vroca-mpv.sock");
+        // rust-review.md DEC-9: player IPC path reserved, not yet wired.
+        let _mpv_sock = self.config.runtime_dir.join("vroca-mpv.sock");
 
         let temp_dir = self
             .config
@@ -68,7 +70,8 @@ impl Daemon {
 
         let (tx, rx) = unbounded::<Message>();
 
-        let state_tx = tx.clone();
+        // rust-review.md DEC-4: shutdown message is never sent; stop() drops senders.
+        let _state_tx = tx.clone();
         self.threads.push(thread::spawn(move || {
             let mut state = State::new(Default::default());
             while let Ok(msg) = rx.recv() {
@@ -93,7 +96,9 @@ impl Daemon {
 
         let tx_legacy = tx.clone();
         let running_legacy = self.running.clone();
-        legacy_listener.set_nonblocking(true).unwrap();
+        legacy_listener
+            .set_nonblocking(true)
+            .map_err(|e| e.to_string())?;
         self.threads.push(thread::spawn(move || {
             while running_legacy.load(Ordering::SeqCst) {
                 if let Ok((mut stream, _)) = legacy_listener.accept() {
@@ -101,7 +106,7 @@ impl Daemon {
                     thread::spawn(move || {
                         let mut buf = [0; 4096];
                         if let Ok(n) = stream.read(&mut buf) {
-                            if let Ok(s) = std::str::from_utf8(&buf[..n]) {
+                            if let Ok(s) = std::str::from_utf8(buf.get(..n).unwrap_or(&[])) {
                                 let op = match parse_legacy(s) {
                                     Ok(op) => op,
                                     Err(e) => {
@@ -132,7 +137,9 @@ impl Daemon {
 
         let tx_struct = tx.clone();
         let running_struct = self.running.clone();
-        struct_listener.set_nonblocking(true).unwrap();
+        struct_listener
+            .set_nonblocking(true)
+            .map_err(|e| e.to_string())?;
         self.threads.push(thread::spawn(move || {
             while running_struct.load(Ordering::SeqCst) {
                 if let Ok((mut stream, _)) = struct_listener.accept() {
@@ -218,6 +225,7 @@ impl Daemon {
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 mod tests {
     use super::*;
 
