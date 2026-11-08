@@ -1,12 +1,16 @@
 # Pickup Notes
 
-Updated 2026-10-29 after the approved Mac GTK panel port.
+Updated 2026-11-07 after the `tts` → `vroca` rename and the Rust scaffold review.
 Repository: `~/dev/exocortex/vroca_tts`.
+
+Rust work: read [handoff-rust-rewrite.md](handoff-rust-rewrite.md) instead;
+it carries the init prompt for the rewrite machine.
 
 Read this first, then [installation.md](installation.md) for commands and
 [roadmap.md](roadmap.md) for sequencing. [handoff.md](handoff.md) preserves the
 earlier Python audit, fixes, and Rust review warnings.
-[rust-spec.md](rust-spec.md) remains normative for Rust.
+[rust-spec.md](rust-spec.md) remains normative for Rust;
+[rust-review.md](rust-review.md) records the 2026-11-07 audit against it.
 
 ## Where Work Stopped
 
@@ -19,7 +23,7 @@ milestones:
 The earlier planning commit is `e8c216c`. These commits are local on `main`;
 no push or deployment was performed. Inspect `git status` before resuming.
 
-The subsequent GUI work adds cross-platform `tts-panel`,
+The subsequent GUI work adds cross-platform `vroca-panel`,
 `Applications/Vroca.app` in the Mac default bundle, an opt-in Hammerspoon Lua
 module, asynchronous panel requests, native GTK and mocked Hammerspoon tests,
 and aligned docs. `8cbfca4` records the earlier packaging handoff. No profile,
@@ -34,7 +38,7 @@ process unreachable. `daemon.py` now refuses duplicates before model startup
 and only cleans shared socket/state files after acquiring socket ownership.
 The packaged regression test passes. The developer approved restarting that
 process with the fixed build; the foreground daemon is running again and
-`tts status` reports Kokoro loaded, 54 voices, and a live player. The open panel
+`vroca status` reports Kokoro loaded, 54 voices, and a live player. The open panel
 can reconnect. No login service was activated. Do not start an old build
 against another live daemon.
 
@@ -58,7 +62,7 @@ not been rerun.
 | Flake `default` / `vroca` | Combined command bundle; existing individual outputs retained |
 | `overlays.default` | Exposes `pkgs.vroca` |
 | `homeModules.default` | Opt-in `services.vroca.enable` and package override |
-| Linux bundle/service | Daemon, CLI, panel, overlay; systemd user unit `tts` |
+| Linux bundle/service | Daemon, CLI, panel, overlay; systemd user unit `vroca` |
 | Apple Silicon bundle/service | Daemon, CLI, GTK controls/status panel, `Vroca.app`, Hammerspoon module; GUI-session LaunchAgent `org.nix-community.home.vroca` |
 | Client | Forwards all arguments (D5); waits for slow replies instead of exiting after half a second |
 | Pitch measurement | References individual inputs so daemon/GUI edits do not repeat 904 voice measurements |
@@ -72,8 +76,8 @@ The developer approved these interfaces:
   append `em_santa` at ID 53 while retaining IDs 0–52.
 - On Mac, honor supplied `XDG_RUNTIME_DIR`; otherwise use
   `~/Library/Caches/vroca`, created privately by the daemon.
-- Restart after failure; `tts quit` exits cleanly and stays stopped.
-- On Mac, `tts log` follows `~/Library/Logs/vroca.log`.
+- Restart after failure; `vroca quit` exits cleanly and stays stopped.
+- On Mac, `vroca log` follows `~/Library/Logs/vroca.log`.
 - First Mac GUI: existing GTK controls/status panel with voices, speed, volume,
   and playback; no subtitle/RSVP port. The panel reports an unavailable daemon
   without starting a Mac service. Closing it leaves the daemon running.
@@ -139,14 +143,36 @@ API/CLI shape, and UI behavior require developer approval. Implementation
 details are delegated. Global Nix configuration, user profiles, and active
 services were not changed.
 
-## CLI Naming TODO — 2026-10-29
+## CLI Rename — 2026-11-07
 
-The developer proposed replacing the generic public command `tts` with
-`vroca`. Track this in Todo Ledger as `todo:lonut-bovot` and in
-[roadmap.md](roadmap.md#open-todos). This is planning work; no command has been
-renamed. Approve the CLI shape, legacy-alias policy, and scope of companion
-command names before changing implementation or deployment bindings.
+The developer approved renaming the public command `tts` to `vroca` with full
+scope: binaries, flake outputs, systemd unit, runtime files, config dir,
+`VROCA_*` env vars, and the Rust bin crates. `tts*` symlink aliases ship in the
+bundle; the daemon falls back to `~/.config/tts` and copies `TTS_*` env values
+until `~/dev/nix-config` is updated. Migration table:
+[installation.md](installation.md#migrating-from-tts). Flake output `vroca`
+stays the bundle; the client output is `vroca-cli`.
 
-The deployment repository already uses the local Git input and contains the
-Mac service/hotkey wiring in commit `a3f9cc5`. No additional deployment edit or
-activation was performed for this TODO update.
+Deployment still names `tts` in Hyprland/niri bindings, `tts-home.nix`, and the
+`TTS_API_KEY` secret. Updating it is a separately approved change; the aliases
+keep it working meanwhile.
+
+## Rust Review And Borrowed Patterns — 2026-11-07
+
+The developer chose **egui/eframe** for the Rust GUI (`rust-spec.md` §7.10);
+`gtk4` is now a forbidden dependency. Borrowed from sibling repos
+([research/2026-11-07-sibling-repo-reuse.md](research/2026-11-07-sibling-repo-reuse.md)):
+workspace lint set and centralised `[workspace.dependencies]`, a dependency
+budget test (`crates/vroca-core/tests/dep_budget.rs`, forbids tokio/gtk4/anyhow/
+tracing and asserts `vroca-core` resolves to serde only), `ErrorCode::exit_code()`
+used by the CLI, and `tools/{check,test,build,fmt,run,check-nix}` per
+ExocortexCent `05-tools.md`. `tools/check` is the gate and passes (23 tests,
+clippy `-D warnings`). The mpv IPC client and prefs migration pattern are
+queued for stages 6 and DEC-17, after DEC-18.
+
+
+`cargo test` passes 19 tests; fmt clean; clippy warnings only. The first slice
+violates `rust-spec.md` §8 (sockets, fake player, journalctl present) and the
+live Python `prefs.json` cannot be parsed. Seventeen concrete bugs and six
+ranked slices are in [rust-review.md](rust-review.md). Next developer decision:
+DEC-18 scope acceptance, then §7.2/§7.3/§7.8 and `quit` exit status.

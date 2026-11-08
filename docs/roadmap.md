@@ -48,13 +48,17 @@ clipboard, and service activation remain unverified. No Rust tests were run.
 
 ## Open TODOs
 
-- [ ] **Consider `vroca` as the public CLI name** (`todo:lonut-bovot`, proposed
-  2026-10-29). `tts` is too generic. Before implementation, approve the command
-  shape and decide whether to retain `tts` as a compatibility alias and whether
-  daemon/panel/overlay names also change. Inventory Python and Rust entry
-  points, Nix outputs/wrappers, service commands, Hammerspoon/Linux bindings,
-  tests, and documentation; migrate consumers together. Current commands remain
-  unchanged while this is a proposal.
+- [x] **Rename the public CLI from `tts` to `vroca`** (`todo:lonut-bovot`,
+  proposed 2026-10-29, implemented 2026-11-07). Approved scope: binaries,
+  services, runtime files, config dir, and `VROCA_*` env vars, with `tts*`
+  symlink aliases kept and Rust bins renamed. Remaining: update `~/dev/nix-config`
+  bindings, the Linux `tts-home.nix` unit, and the `TTS_API_KEY` secret name;
+  then drop the aliases and legacy fallbacks. See
+  [installation.md](installation.md#migrating-from-tts).
+- [ ] **Overlay on Wayland without GTK** — egui has no layer-shell; pick option (a)/(b)/(c) in `rust-spec.md` §7.10 before slice 8 touches the overlay.
+- [ ] **Approve Decision 18** (first-slice scope, Proposed in `rust-spec.md`) and the §7.1 engine-binding recommendation (official `sherpa-onnx` crate via `SHERPA_ONNX_LIB_DIR`). Slice order and init prompt: [handoff-rust-rewrite.md](handoff-rust-rewrite.md).
+  Also settle §7.2, §7.3, §7.8, and `quit` exit status before daemon
+  transport work.
 
 ---
 
@@ -236,12 +240,12 @@ Sequencing from `rust-spec.md` §9.3. Track A does not block any of it.
 |:---|:---|:---|
 | 1 | Lock first-slice decisions | **Done** |
 | 2 | Rust toolchain and workspace | Present; workspace review pending |
-| 3 | Typed operations, state transitions, protocol parsers. No audio. | **Implemented, unreviewed** — see `handoff.md` §6 |
-| 4 | Public client and CLI against a fake daemon | Code present; review and acceptance pending |
-| 5 | Daemon lifecycle, fake engine and player | Code present; review and acceptance pending |
+| 3 | Typed operations, state transitions, protocol parsers. No audio. | **Reviewed 2026-11-07** — 19 tests pass; §8 scope violated; parser and schema gaps listed in `rust-review.md` |
+| 4 | Public client and CLI against a fake daemon | Code present; reviewed, acceptance blocked on §7.2 and local validation |
+| 5 | Daemon lifecycle, fake engine and player | Code present; reviewed, acceptance blocked on framing, cleanup ownership, and §7.3/§7.8 |
 | 6 | One local engine, real playback | |
 | 7 | Remaining engines and alignment | |
-| 8 | Overlay and panel through the shared client | |
+| 8 | Overlay and panel through the shared client | Panel toolkit decided 2026-11-07: egui/eframe (`rust-spec.md` §7.10). Overlay layer-shell path open |
 | 9 | Parity tests and dogfooding, deployment unchanged | |
 | 10 | Update `~/dev/nix-config` — separately approved | |
 | 11 | Run Rust with a documented Python rollback | |
@@ -283,7 +287,7 @@ design and cloning. It cannot live inside the daemon: it is a ~2B parameter
 transformer wanting PyTorch or vLLM and a GPU, against a stack deliberately
 built on C++ onnxruntime with no Python ML stack.
 
-**First config live (2026-09-01).** `~/.config/tts/env` points the `remote`
+**First config live (2026-09-01).** `~/.config/vroca/env` points the `remote`
 engine at DeepInfra's OpenAI-compatible endpoint with model
 `Qwen/Qwen3-TTS` (the CustomVoice variant; 9 preset voices, English-native:
 Ryan, Aiden). Verified end to end: `engine remote`, `voice Ryan`, speech.
@@ -308,7 +312,7 @@ this flake; a Home Manager LaunchAgent belongs in the separately owned
 `~/dev/nix-config` only after approval. The GTK panel now supports Mac; the
 layer-shell overlay remains Linux-only. Hammerspoon owns global hotkeys.
 
-The portable `tts` wrapper, shared Darwin runtime directory, logging behavior,
+The portable `vroca` wrapper, shared Darwin runtime directory, logging behavior,
 and crash-only LaunchAgent policy are implemented in the package/module.
 Validation of the daemon and client on physical Apple Silicon hardware precedes
 deployment. The approved GTK port avoids a new UI implementation while the

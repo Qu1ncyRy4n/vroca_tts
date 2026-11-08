@@ -103,54 +103,54 @@ priorities and implementation review status.
 hotkeys and local programs
           |
           v
-     tts shell client -----> tts.sock
+     vroca shell client -----> vroca.sock
                                   |
                                   v
                              Python daemon
                               |          |
-                         tts-state.json  mpv IPC
+                         vroca-state.json  mpv IPC
                               |
                               v
                          GTK overlay
 
-     GTK panel -----------> tts.sock
+     GTK panel -----------> vroca.sock
           |
-          +---------------> tts-mode        (ownership violation, N14)
+          +---------------> vroca-mode        (ownership violation, N14)
 ```
 
 | Executable | Source | Defined in |
 | --- | --- | --- |
-| `tts` | `writeShellApplication` wrapping `socat` | Vroca `flake.nix` packages |
-| `tts-daemon` | `python_impl/daemon.py` | same |
-| `tts-panel` | `python_impl/panel.py` | same |
-| `tts-overlay` | `python_impl/overlay.py` | same |
+| `vroca` | `writeShellApplication` wrapping `socat` | Vroca `flake.nix` packages |
+| `vroca-daemon` | `python_impl/daemon.py` | same |
+| `vroca-panel` | `python_impl/panel.py` | same |
+| `vroca-overlay` | `python_impl/overlay.py` | same |
 | `measure.py` | build-time only; emits pitch tables | same, `pitchTables` derivation |
 
 ### 3.2 Files And Sockets
 
 | Path | Written by | Mode | Atomic | Notes |
 | --- | --- | --- | --- | --- |
-| `$XDG_RUNTIME_DIR/tts.sock` | daemon | `0666` | — | unconditionally unlinked at startup (D7) |
-| `$XDG_RUNTIME_DIR/tts-mpv.sock` | daemon (`Mpv.__init__`) | `0600` | — | also unconditionally unlinked (N1) |
-| `$XDG_RUNTIME_DIR/tts-state.json` | daemon | `0644` | yes, `os.replace` | 20 fields, unversioned |
-| `$XDG_RUNTIME_DIR/tts-mode` | **daemon and panel** | `0644` | no | bare string; ownership violation (N14) |
-| `$XDG_RUNTIME_DIR/tts-<rand>/` | daemon | `0700` | — | wav cache; never removed (N2) |
-| `$XDG_CONFIG_HOME/tts/prefs.json` | daemon | `0644` | yes, `os.replace` | 7 fields, unversioned |
-| `$XDG_CONFIG_HOME/tts/voices/*.wav` | user | — | — | zipvoice references |
-| `$XDG_CONFIG_HOME/tts/voices/*.txt` | daemon | — | no | cached ASR transcripts |
-| `$XDG_CONFIG_HOME/tts/env` | user | — | — | `EnvironmentFile=-%E/tts/env` |
+| `$XDG_RUNTIME_DIR/vroca.sock` | daemon | `0666` | — | unconditionally unlinked at startup (D7) |
+| `$XDG_RUNTIME_DIR/vroca-mpv.sock` | daemon (`Mpv.__init__`) | `0600` | — | also unconditionally unlinked (N1) |
+| `$XDG_RUNTIME_DIR/vroca-state.json` | daemon | `0644` | yes, `os.replace` | 20 fields, unversioned |
+| `$XDG_RUNTIME_DIR/vroca-mode` | **daemon and panel** | `0644` | no | bare string; ownership violation (N14) |
+| `$XDG_RUNTIME_DIR/vroca-<rand>/` | daemon | `0700` | — | wav cache; never removed (N2) |
+| `$XDG_CONFIG_HOME/vroca/prefs.json` | daemon | `0644` | yes, `os.replace` | 7 fields, unversioned |
+| `$XDG_CONFIG_HOME/vroca/voices/*.wav` | user | — | — | zipvoice references |
+| `$XDG_CONFIG_HOME/vroca/voices/*.txt` | daemon | — | no | cached ASR transcripts |
+| `$XDG_CONFIG_HOME/vroca/env` | user | — | — | `EnvironmentFile=-%E/vroca/env` |
 
 ### 3.3 Environment Variables
 
 | Variable | Required | Consumer |
 | --- | --- | --- |
-| `TTS_MODEL_DIRS` | yes, JSON object | `daemon.main` |
-| `TTS_THREADS` | no, default `4` | engine construction |
-| `TTS_PITCH_DIR` | no | `load_pitch_table` |
-| `TTS_API_BASE` | remote only | `RemoteEngine` |
-| `TTS_API_KEY_FILE` | remote only | `RemoteEngine` |
-| `TTS_API_MODEL` | no, default `tts-1` | `RemoteEngine` |
-| `TTS_API_VOICES` | no, six defaults | `RemoteEngine` |
+| `VROCA_MODEL_DIRS` | yes, JSON object | `daemon.main` |
+| `VROCA_THREADS` | no, default `4` | engine construction |
+| `VROCA_PITCH_DIR` | no | `load_pitch_table` |
+| `VROCA_API_BASE` | remote only | `RemoteEngine` |
+| `VROCA_API_KEY_FILE` | remote only | `RemoteEngine` |
+| `VROCA_API_MODEL` | no, default `tts-1` | `RemoteEngine` |
+| `VROCA_API_VOICES` | no, six defaults | `RemoteEngine` |
 | `XDG_RUNTIME_DIR` | falls back to tempdir | all paths |
 | `XDG_CONFIG_HOME` | falls back to `~/.config` | prefs and voices |
 
@@ -166,13 +166,13 @@ Defined in `~/dev/nix-config/modules/desktop/linux/core/cosmic-home.nix`.
 
 | Binding | Command |
 | --- | --- |
-| `Super+Z` | `tts read` |
-| `Super+Shift+Z` | `tts-panel` |
-| `Super+X` | `tts toggle` |
-| `Super+C` | `tts back` |
-| `Super+V` | `tts next` |
-| `Super+Shift+C` | `tts slower` |
-| `Super+Shift+V` | `tts faster` |
+| `Super+Z` | `vroca read` |
+| `Super+Shift+Z` | `vroca-panel` |
+| `Super+X` | `vroca toggle` |
+| `Super+C` | `vroca back` |
+| `Super+V` | `vroca next` |
+| `Super+Shift+C` | `vroca slower` |
+| `Super+Shift+V` | `vroca faster` |
 
 No hotkey binds `skip`, `clear`, `say`, or `queue`. The hotkey surface is a
 strict subset of the socket surface, which bounds the blast radius of the
@@ -182,7 +182,7 @@ semantic changes in Decision 1.
 
 `engine`, `voice`, `speed`, `aligner`, `font_size`, `words_visible`, `position`.
 
-Unversioned. Overlay mode is **not** among them; it lives in `tts-mode` and
+Unversioned. Overlay mode is **not** among them; it lives in `vroca-mode` and
 persists only because that file happens to survive.
 
 ### 3.7 Runtime Snapshot Fields (20)
@@ -203,7 +203,7 @@ Unversioned. Both GUIs consume it as an API.
 | Voice list, "Use voice" | `voice <int>` |
 | "Preview" | `preview <int>` |
 | Aligner dropdown | `aligner <name>` |
-| **Overlay mode dropdown** | **direct `tts-mode` file write (N14)** |
+| **Overlay mode dropdown** | **direct `vroca-mode` file write (N14)** |
 | Position dropdown | `position <name>` |
 | RSVP font size scale | `font_size <int>` |
 | Scroll context scale | `words_visible <int>` |
@@ -211,12 +211,12 @@ Unversioned. Both GUIs consume it as an API.
 | Stop / Reload / Unload / Quit | `stop`, `reload`, `unload`, `quit` |
 | Background refresh, 400 ms | `status`, and `catalogue` once per engine |
 
-The overlay renders only. It polls `tts-state.json` and `tts-mode` every 50 ms
+The overlay renders only. It polls `vroca-state.json` and `vroca-mode` every 50 ms
 and implements `subtitle`, `rsvp`, `scroll_rsvp`, and `off`.
 
 ### 3.9 Legacy Socket Exchange
 
-1. Client connects to `tts.sock`.
+1. Client connects to `vroca.sock`.
 2. Client writes one plaintext command.
 3. Daemon reads at most 4096 bytes, once.
 4. Daemon writes one plaintext response.
@@ -234,13 +234,13 @@ the earlier draft listed as hypothetical are actually occurring.
 
 | Observation | Command | Result |
 | --- | --- | --- |
-| Two daemons both listening on one path | `ss -xlp \| grep tts.sock` | pids 207703 and 154595, same path, inodes 2908932 and 2062913. Pid 154595 is unreachable; its inode was unlinked by the newer start. |
+| Two daemons both listening on one path | `ss -xlp \| grep vroca.sock` | pids 207703 and 154595, same path, inodes 2908932 and 2062913. Pid 154595 is unreachable; its inode was unlinked by the newer start. |
 | Orphaned players | `pgrep -c mpv` | 11 live `mpv` processes for 2 daemons |
-| Leaked temp directories | `ls -d $XDG_RUNTIME_DIR/tts-*` | 61 directories |
-| Restart churn | `systemctl --user show tts.service` | `NRestarts=5`, `MainPID=207703` |
-| Catalogue response size | `printf catalogue \| socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/tts.sock \| wc -c` | 101,359 bytes for libritts |
+| Leaked temp directories | `ls -d $XDG_RUNTIME_DIR/vroca-*` | 61 directories |
+| Restart churn | `systemctl --user show vroca.service` | `NRestarts=5`, `MainPID=207703` |
+| Catalogue response size | `printf catalogue \| socat - UNIX-CONNECT:$XDG_RUNTIME_DIR/vroca.sock \| wc -c` | 101,359 bytes for libritts |
 | Socket exposure | `ls -l $XDG_RUNTIME_DIR` | `srw-rw-rw-` inside a `0700` directory |
-| **D8 crashing in production** | `journalctl --user -u tts.service` | `ValueError: invalid literal for int() with base 10: 'af_kore'` at `daemon.py:1032`, then `status=1/FAILURE`. Restart counter reached **51**. |
+| **D8 crashing in production** | `journalctl --user -u vroca.service` | `ValueError: invalid literal for int() with base 10: 'af_kore'` at `daemon.py:1032`, then `status=1/FAILURE`. Restart counter reached **51**. |
 
 ### 4.1 The `voice af_kore` Crash
 
@@ -283,7 +283,7 @@ left Open in section 7.
 | ID | Finding | Evidence |
 | --- | --- | --- |
 | D7 | Startup unconditionally unlinks the public socket. A second daemon silently orphans a healthy one; both keep calling `accept()` on different inodes. | `daemon.py:974-977`; confirmed live |
-| N1 | `Mpv.__init__` also unconditionally unlinks `tts-mpv.sock`, so a second daemon breaks the first daemon's **player IPC**, not only its public socket. Strictly worse than D7 alone. | `daemon.py:96-98` |
+| N1 | `Mpv.__init__` also unconditionally unlinks `vroca-mpv.sock`, so a second daemon breaks the first daemon's **player IPC**, not only its public socket. Strictly worse than D7 alone. | `daemon.py:96-98` |
 | N2 | `tempfile.mkdtemp` runs per daemon start and the directory is never removed. 61 leaked directories observed. | `daemon.py:386` |
 | N3 | `quit` calls `os._exit(0)`. With `Restart=on-failure`, exit status 0 means the user service **stops permanently** until manually started. It also skips socket unlink, tmpdir removal, and state cleanup. | `daemon.py:1018-1024`; `tts.nix:213` |
 | D9 | Daemon crashes can leave child `mpv` processes alive. No `SIGTERM` handler, no `atexit`, no reaping. | `daemon.py:99-103`; confirmed live |
@@ -296,7 +296,7 @@ left Open in section 7.
 | D8 | `float()` and `int()` on malformed arguments raise and terminate the daemon: `speed`, `voice`, `font_size`, `words_visible`, `preview`. **Confirmed in production: `voice af_kore` crashed the service to a restart counter of 51.** See §4.1. | `daemon.py:1030,1032,1038,1040,1046` |
 | N5 | The response uses `conn.send()`, not `sendall()`, and discards the return value. The libritts `catalogue` response measures **101,359 bytes** against an effective Unix-socket payload capacity of roughly 106 KB. Margin is under 5% and shrinks as voices are added. A partial write silently truncates JSON; the panel's `json.loads` then fails and it shows an empty voice list. | `daemon.py:1049-1052`; measured |
 | N6 | A single `conn.recv(4096)`. Longer text is truncated, possibly mid-UTF-8. `errors="replace"` turns that into corruption rather than a failure. | `daemon.py:988-989` |
-| N7 | `strip()` runs before dispatch, so `tts say ""` arrives as `say` and returns `unknown: say`. Leading and trailing whitespace in spoken text is also lost. | `daemon.py:989,1025` |
+| N7 | `strip()` runs before dispatch, so `vroca say ""` arrives as `say` and returns `unknown: say`. Leading and trailing whitespace in spoken text is also lost. | `daemon.py:989,1025` |
 
 ### 5.3 Semantics
 
@@ -307,7 +307,7 @@ left Open in section 7.
 | D4 | `queue` while paused replaces the active speech and starts the new text instead of appending. | `daemon.py:744-758` |
 | N8 | `reset` / `reset_prefs` does **not** reset `engine`, contradicting "Resets all settings to factory defaults". | `daemon.py:453-468`; `vroca.md` §2 |
 | N9 | `reset_prefs` sets `sid = 0` without clearing the wav cache, so already-rendered audio in the **old voice** keeps playing. | `daemon.py:453-461` |
-| N10 | `set_engine` sets `tts = None` without clearing the wav cache, so **audio rendered by the previous engine keeps playing after an engine switch**. | `daemon.py:496-509` |
+| N10 | `set_engine` sets `vroca = None` without clearing the wav cache, so **audio rendered by the previous engine keeps playing after an engine switch**. | `daemon.py:496-509` |
 | N11 | `read()` clears `cache` but not `spans`, leaving stale word timings for indices whose re-render fails. | `daemon.py:671-679` vs `681-688` |
 | N12 | `_on_eof` returns early when `paused`, so pausing exactly at a sentence boundary can strand the waiting queue. | `daemon.py:607-610` |
 | N13 | `_on_eof` clears `sents` but not `word`. Live state shows `sentence: "", total: 0, word: 6`. | `daemon.py:621-623`; confirmed live |
@@ -316,7 +316,7 @@ left Open in section 7.
 
 | ID | Finding | Evidence |
 | --- | --- | --- |
-| N14 | The panel writes `tts-mode` directly, violating the sole-owner rule that `AGENTS.md` already states. | `panel.py:266-270` |
+| N14 | The panel writes `vroca-mode` directly, violating the sole-owner rule that `AGENTS.md` already states. | `panel.py:266-270` |
 | N15 | `set_speed`, `set_font_size`, `set_words_visible`, and `set_position` mutate state **without** holding `self.lock`, while `status()` reads without it. Torn snapshots are possible. | `daemon.py:433-451,545-550,637-662` |
 | N16 | `_dump()` is called from `_on_pos`, i.e. on every mpv position tick. Each dump calls `engines()`, which does `os.listdir(CLONE_DIR)` and `os.path.exists(key_file)`, then serializes 20 fields and rewrites the state file. A filesystem scan and a file rewrite many times per second. | `daemon.py:591-605,653,664-669,511-517` |
 | N17 | `render_ms` is never cleared, so `avg_render_ms` mixes engines and documents for the daemon's entire lifetime. | `daemon.py:383,573,661` |
@@ -332,9 +332,9 @@ left Open in section 7.
 | N20 | Context words: the daemon clamps 1–15 and the docs say 1–15, but the panel slider is **1–9**. Live value 2. | `daemon.py:440`; `panel.py:217` |
 | N21 | `_anchor` computes `bottom = (pos == "bottom" and mode != "rsvp" and mode != "scroll_rsvp")`. In both RSVP modes, `position: bottom` and `position: center` produce **identical** vertically-centered output. The documented three positions are two. | `overlay.py:112-123` |
 | D1 | No `/tmp/tts-speak` spool watcher exists, despite earlier documentation. Already reconciled in `vroca.md`. | — |
-| D5 | The `tts` shell client forwards remaining arguments only for `say`, `speak`, and `queue`. `tts speed 1.2` sends bare `speed`. | `tts.nix:172-180` |
-| N22 | Bare `tts` with no arguments means `read`, and `tts log` is a client-side `journalctl` shortcut. Neither appears in the IPC reference table. | `tts.nix:168-170,178` |
-| N23 | The CLI prints an error and exits 1 when the socket is missing; the panel instead spawns `systemctl --user start tts`. Two clients, two opposite policies. | `tts.nix:171`; `panel.py:330-338` |
+| D5 | The `vroca` shell client forwards remaining arguments only for `say`, `speak`, and `queue`. `vroca speed 1.2` sends bare `speed`. | `tts.nix:172-180` |
+| N22 | Bare `vroca` with no arguments means `read`, and `vroca log` is a client-side `journalctl` shortcut. Neither appears in the IPC reference table. | `tts.nix:168-170,178` |
+| N23 | The CLI prints an error and exits 1 when the socket is missing; the panel instead spawns `systemctl --user start vroca`. Two clients, two opposite policies. | `tts.nix:171`; `panel.py:330-338` |
 | D6 | The panel's `_starting` latch records one start attempt, ignores the result, and offers no retry or error state, so it can stick on "starting". | `panel.py:330-338` |
 | D11 | The socket is `0666`, but the enclosing per-user runtime directory is `0700`. The real trust boundary is the owning user, and the mode bits are misleading. | `daemon.py:981`; confirmed live |
 
@@ -463,7 +463,7 @@ rust_impl/
                              depends on vroca-core only.
     vroca-daemon/            lifecycle, engines, player, workers.
   bins/
-    tts/  tts-daemon/  tts-panel/  tts-overlay/
+    vroca/  vroca-daemon/  vroca-panel/  vroca-overlay/
 ```
 
 **Justification.** These three boundaries already exist in reality. `vroca-core`
@@ -513,7 +513,7 @@ lockfile-resolved graph contains no async runtime, socket, GUI, or FFI crate.
 
 | Path | Format |
 | --- | --- |
-| `$XDG_RUNTIME_DIR/tts.sock` | legacy plaintext, byte-identical, unchanged |
+| `$XDG_RUNTIME_DIR/vroca.sock` | legacy plaintext, byte-identical, unchanged |
 | `$XDG_RUNTIME_DIR/vroca-v1.sock` | structured, versioned (bound in slice 2, see Decision 6) |
 
 **Justification.** No guessing, therefore no class of misparse bugs. Retiring
@@ -544,7 +544,7 @@ compatibility. Permissions for `vroca-v1.sock` are **Open** (section 7.3); the
 recommendation is owner-only.
 
 **Test evidence required.** Every documented legacy command round-tripped over
-`tts.sock`; structured requests over `vroca-v1.sock`; cross-protocol misuse in
+`vroca.sock`; structured requests over `vroca-v1.sock`; cross-protocol misuse in
 both directions producing typed errors; both sockets removed on clean shutdown.
 
 ---
@@ -709,7 +709,7 @@ in slice 1.
 
 **Status:** Decided. **Resolves N14.**
 
-**Current behavior.** Mode lives in `tts-mode`, a bare-string file written by
+**Current behavior.** Mode lives in `vroca-mode`, a bare-string file written by
 both the daemon (`cycle_mode`) and the panel (`panel.py:266-270`). It is the
 one user setting absent from `prefs.json`, and it persists only because the file
 happens to survive.
@@ -724,7 +724,7 @@ happens to survive.
   file cannot participate in the migration scheme of Decision 17.
 
 **Decision.** Overlay mode becomes a durable preference in `prefs.json`, owned
-solely by the daemon. `tts-mode` remains written as a **read-only mirror** so
+solely by the daemon. `vroca-mode` remains written as a **read-only mirror** so
 the Python overlay keeps working during migration. No other process may write
 it.
 
@@ -762,7 +762,7 @@ documented order `subtitle → rsvp → scroll_rsvp → off`.
 
 **Status:** Decided.
 
-**Current behavior.** The overlay re-reads `tts-state.json` every 50 ms whether
+**Current behavior.** The overlay re-reads `vroca-state.json` every 50 ms whether
 or not anything changed (`overlay.py:25,98-110`). The daemon rewrites that file
 on every mpv position tick (N16).
 
@@ -1280,14 +1280,14 @@ command strings through a long `if/elif` chain in `main()`.
 | Validated engine identity | `EngineId` (newtype) |
 | Overlay mode variant | `OverlayMode::ScrollRsvp`, wire spelling `scroll_rsvp` |
 
-Binaries remain `tts`, `tts-daemon`, `tts-panel`, `tts-overlay`. Crates are
+Binaries remain `vroca`, `vroca-daemon`, `vroca-panel`, `vroca-overlay`. Crates are
 `vroca-core`, `vroca-client`, `vroca-daemon`.
 
 **Justification.** Names become public concepts across the domain, the wire
 format, the CLI, and the documentation, so they are expensive to change later.
 Separating `Operation` from `Request` keeps wire concerns out of domain code.
 Separating `VoiceId` from `SpeakerIndex` is what makes Decision 10 expressible.
-The wire spelling `scroll_rsvp` matches what the `tts-mode` file contains today,
+The wire spelling `scroll_rsvp` matches what the `vroca-mode` file contains today,
 so no existing data needs rewriting. Keeping the binary names preserves every
 hotkey, script, and systemd unit.
 
@@ -1306,7 +1306,7 @@ names asserted in packaging; `EngineId` rejects unknown values at construction.
 
 **Status:** Decided.
 
-**Current behavior.** `prefs.json` and `tts-state.json` carry no version field.
+**Current behavior.** `prefs.json` and `vroca-state.json` carry no version field.
 `load_prefs` catches `OSError` and `ValueError` and returns `{}`, so a corrupt
 preferences file **silently reverts every setting to defaults with no message
 anywhere** (`daemon.py:915-920`). Unknown fields are dropped on write-back
@@ -1362,6 +1362,64 @@ atomic write verified under interruption.
 
 ---
 
+### Decision 18 — First-Slice Scope Acceptance
+
+**Status:** Proposed 2026-11-08 by `agent-assistant`. Awaiting developer
+approval. Nothing below is normative until the status reads Decided.
+
+**Current behavior.** Section 8 bounds the first Rust change to the three
+crates, typed operations, the legacy parser, the unbound codec, schema types,
+and fixtures. It forbids sockets, `mpv`, audio, GTK, `sherpa-onnx`, and
+systemd. The code that landed (`94ac41a`, reviewed in
+[`rust-review.md`](rust-review.md)) contains all of the allowed items in
+`vroca-core` and also: two `UnixListener`s bound in `vroca-daemon`, a
+`UnixStream` client in `vroca-client`, a fake player that spawns `sleep`, a
+`journalctl` shell-out in the CLI, and the DEC-6 codec bound to
+`vroca-v1.sock` with no version field. The handoff flagged this on 2026-10-28;
+the 2026-11-07 review confirmed it. Every later slice is blocked until the
+boundary is either restored or moved on the record, because section 9's gate
+accepts slices one at a time.
+
+**Alternatives considered.**
+
+- *Pull back.* Delete or feature-gate the socket, player, and CLI transport
+  code, accept slice 1 on `vroca-core` alone, then re-land the rest as slices
+  2 to 5. Honest to section 8, but it discards working tests (client,
+  daemon lifecycle) and costs a day of churn for no behavioral gain.
+- *Ignore.* Keep going without a record. Rejected: that is precisely the drift
+  section 8 exists to stop, and the spec would no longer describe the code.
+
+**Decision (proposed).** Accept that slices 1, 2, and parts of 3 to 5 landed
+together, and replace the single first-slice gate with per-crate acceptance:
+
+1. `vroca-core` is accepted when it meets section 8 items 2 to 6 and the
+   `rust-review.md` parser, schema, and state-machine gaps are closed. The
+   dependency budget test proves it resolves to serde only.
+2. `vroca-client` and the `vroca` CLI are accepted when Decision 5 holds:
+   local validation, typed results, `unavailable` on a missing socket with
+   the section 7.2 message, exit codes from `ErrorCode::exit_code()`.
+3. `vroca-daemon` is accepted when Decision 3, 4, and 9 rule 1 hold: framed
+   legacy reads with the section 7.8 cap, own-path-only cleanup, a real
+   shutdown message, and a `Player` trait with a fake implementation.
+4. DEC-6 is amended: the structured codec MAY be bound to `vroca-v1.sock`
+   now, provided every request carries `"v": 1` and the daemon rejects any
+   other value with `invalid_request`. The "no socket bound" test is replaced
+   by a version-rejection test.
+5. Section 8's prohibition on `mpv`, audio, GTK, `sherpa-onnx`, and
+   `~/dev/nix-config` stands until slice 6.
+
+**Justification.** The code exists and its tests pass; the cost of the
+violation is lost traceability, not lost correctness. Per-crate acceptance
+restores traceability without deleting work, and it matches how the review was
+actually conducted. Promoting DEC-6 with a mandatory version field removes the
+only part of the overreach that would have been expensive to unwind later.
+
+**Test evidence required.** The dependency budget test; one acceptance test
+list per crate checked into `rust-review.md` with each item ticked; the
+`"v": 1` rejection test.
+
+---
+
 ## 7. Open Questions
 
 These are **not** decided. Implementation MUST NOT resolve them implicitly.
@@ -1373,9 +1431,27 @@ bindings, or a narrow local FFI wrapper?
 
 **Blocks.** Slice 6 (first real synthesis engine). Does **not** block slice 1.
 
-**Recommendation.** A narrow local FFI wrapper isolated in its own crate, so
-`unsafe` is confined to one reviewable surface and `vroca-core` stays clean per
-Decision 2.
+**Researched 2026-11-08** (details in
+[`research/2026-11-07-sibling-repo-reuse.md`](research/2026-11-07-sibling-repo-reuse.md#sherpa-onnx-rust-binding)).
+The community crate `sherpa-rs` is deprecated. Upstream k2-fsa now publishes
+an official `sherpa-onnx` crate (2.0.1, 2026-10-27, Apache-2.0) over a
+`sherpa-onnx-sys` crate with pregenerated bindings. Its build script honours
+`SHERPA_ONNX_LIB_DIR` and never downloads when that is set, so a Nix build can
+point it at the nixpkgs `sherpa-onnx` package (`lib/libsherpa-onnx-c-api.dylib`
+on Darwin). `OfflineTts` is `Send + Sync` and exposes every engine Vroca uses:
+Kokoro, VITS, Matcha, Supertonic, ZipVoice. `generate_with_config` takes a
+`FnMut(&[f32], f32) -> bool` callback that receives samples as they are
+produced and can abort, which is the streaming and cancellation primitive R4
+and DEC-1's generation counter need.
+
+**Revised recommendation (pending developer approval).** Use the official
+crate, `shared` feature, in a dedicated `vroca-engine` crate so `vroca-core`
+stays serde-only (Decision 2) and `unsafe` stays out of our code entirely. Pin
+the crate to the nixpkgs library version (1.13.8 today; 2.0.x needs a nixpkgs
+bump or an overlay). The old narrow-FFI recommendation is withdrawn: the
+official wrapper is the narrow surface. The `Send + Sync` marker does not prove
+concurrent `generate` on one instance is safe (10-f); test it before R1/R2
+design, and until then serialise each engine behind one worker thread.
 
 ### 7.2 Daemon Start Policy
 
@@ -1478,9 +1554,27 @@ required?
 
 **Blocks.** Slice 8.
 
-**Recommendation.** Keep GTK4 and layer-shell, since the layer-shell dependency
-is what makes a non-focus-stealing overlay possible at all, and keep the two as
-separate processes so an overlay crash cannot take the panel with it.
+**Decided 2026-11-07 (developer): egui/eframe, not GTK.** The Rust panel is an
+eframe application; `gtk4` is a forbidden dependency in
+`crates/vroca-core/tests/dep_budget.rs`. Rationale: one toolkit shared with
+sibling repos (todo_app_project, omnichan), no GObject introspection or
+`wrapGAppsHook4` in the Nix build, and a renderer-free interaction state that is
+testable without a window. The panel keeps I/O off the UI frame through a
+request/reply worker lane on `std::thread` with a repaint waker (the omnichan
+`omni-ui/src/worker.rs` pattern; see
+[`research/2026-11-07-sibling-repo-reuse.md`](research/2026-11-07-sibling-repo-reuse.md)).
+
+Panel and overlay remain separate processes.
+
+**Open consequence: the overlay.** egui/winit has no wlr-layer-shell binding,
+so a non-focus-stealing subtitle strip on Wayland is not available through
+eframe. Options, in order of preference: (a) keep the Python GTK overlay as the
+Linux overlay until a Rust layer-shell path exists, (b) a small winit-free
+overlay process on `smithay-client-toolkit` layer-shell drawing with a
+software rasteriser, (c) an eframe window with `always_on_top` and focus
+avoidance, accepting focus-steal risk. Decide before slice 8 starts the
+overlay; the panel does not depend on it. macOS has no layer-shell either, so
+the Mac overlay was already out of scope.
 
 ### 7.11 TTS-Aware Markdown Notation
 
@@ -1513,7 +1607,7 @@ documents.
 - ~~Whether `unload` remains useful once engine loading is redesigned.~~
   **Answered by §10.5:** it survives and is promoted into a model residency
   surface keyed by `ModelId`. N18 remains a defect to fix in the panel.
-- Whether the `tts-state.json` file is a public interface or only a migration
+- Whether the `vroca-state.json` file is a public interface or only a migration
   artifact (interacts with Decision 8).
 - Whether a spool file remains useful now that a public local API is specified
   (D1). The original `/tmp` / `0o666` proposal is rejected; any spool must
@@ -1651,7 +1745,7 @@ on libritts, plus the live daemon's own reported figure for kokoro:
 
 | Stage | Cost |
 | --- | ---: |
-| `tts` client spawn | ~5 ms |
+| `vroca` client spawn | ~5 ms |
 | primary-selection grab (`wl-paste`) | ~3 ms |
 | socket round trip | ~2 ms |
 | `write_wav` to tmpfs | ~23 ms |
@@ -1869,7 +1963,7 @@ different things are easily conflated:
 | --- | --- | --- |
 | What | Short `.wav` recordings for zero-shot cloning | ONNX graphs |
 | Risk | Low. Audio data parsed as audio. | High. An arbitrary computation graph loaded into the daemon by `onnxruntime`. |
-| Already supported | Yes — zipvoice clones from `~/.config/tts/voices/*.wav` | No. All models are Nix store paths from `TTS_MODEL_DIRS`. |
+| Already supported | Yes — zipvoice clones from `~/.config/vroca/voices/*.wav` | No. All models are Nix store paths from `VROCA_MODEL_DIRS`. |
 
 **The per-repo agent-voice requirement is almost certainly satisfied by
 reference clips, not model files.** zipvoice already performs zero-shot cloning
