@@ -21,14 +21,14 @@
           inherit vroca;
           default = vroca;
           inherit (vroca)
-            tts
-            tts-daemon
-            tts-panel
-            tts-pitch-tables
+            vroca-cli
+            vroca-daemon
+            vroca-panel
+            vroca-pitch-tables
             ;
         }
         // nixpkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-          inherit (vroca) tts-overlay;
+          inherit (vroca) vroca-overlay;
         };
     in
     {
@@ -71,7 +71,7 @@
         in
         {
           default = pkgs.mkShell {
-            GI_TYPELIB_PATH = self.packages.${system}.vroca.tts-panel.typelibs;
+            GI_TYPELIB_PATH = self.packages.${system}.vroca.vroca-panel.typelibs;
             packages = [
               pyEnv
               pkgs.uv

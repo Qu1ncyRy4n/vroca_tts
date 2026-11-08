@@ -3,7 +3,7 @@
 Updated 2026-10-29. Approved direction: a working Apple Silicon release with
 a UI and Hammerspoon configuration for global hotkeys. The developer approves
 interface choices. The first UI is the existing GTK controls/status panel,
-packaged as `tts-panel` and `Vroca.app`; subtitles/RSVP are outside this port.
+packaged as `vroca-panel` and `Vroca.app`; subtitles/RSVP are outside this port.
 
 The target is a reproducibly packaged, per-user daemon on Apple Silicon
 macOS. The planned deployment is a Nix-built executable supervised by a
@@ -25,7 +25,7 @@ and activated LaunchAgent lifecycle have not been verified. See
 
 The initial macOS target is intentionally limited to:
 
-- `tts-daemon` and `tts` built for `aarch64-darwin`.
+- `vroca-daemon` and `vroca` built for `aarch64-darwin`.
 - Local Unix-socket commands and local `mpv` playback.
 - `read` through one explicit `pbpaste` read of the general clipboard.
 - A per-user LaunchAgent that keeps the foreground daemon running while the
@@ -43,11 +43,11 @@ the existing Python daemon and command protocol, with voices, speed, volume,
 playback, and status. Mac windows hide aligner and Linux overlay controls.
 Model operations run off the GTK thread; a missing daemon produces an explicit
 unavailable message rather than a service-start attempt. The combined package
-includes `Applications/Vroca.app`; the individual `tts-panel` output provides
+includes `Applications/Vroca.app`; the individual `vroca-panel` output provides
 the command. See [installation.md](installation.md#mac-panel-and-hotkeys) for
 launch commands, controls, and a short human verification path.
 
-Global hotkeys are supplied as Hammerspoon Lua configuration calling `tts`.
+Global hotkeys are supplied as Hammerspoon Lua configuration calling `vroca`.
 The packaged module contains absolute Nix paths and binds no keys when loaded.
 The approved defaults match Linux/Speechify with Option replacing Super.
 They are enabled only by an explicit `setup()` call. Changing the user's active
@@ -92,14 +92,14 @@ environment setting or installer script is needed.
 1. Conventional `callPackage` package, combined default bundle, optional
    overlay, and opt-in `services.vroca` Home Manager module.
 2. Runtime directory: preserve supplied `XDG_RUNTIME_DIR`; otherwise use the
-   private Mac cache directory above. The socket remains `tts.sock`.
-3. `tts quit` leaves the agent stopped; unsuccessful exits are restarted.
-4. `tts log` follows `~/Library/Logs/vroca.log` on Mac.
+   private Mac cache directory above. The socket remains `vroca.sock`.
+3. `vroca quit` leaves the agent stopped; unsuccessful exits are restarted.
+4. `vroca log` follows `~/Library/Logs/vroca.log` on Mac.
 
 ## Remaining Decisions
 
 1. Select the active configuration's module path and approve activation.
-   The package supplies absolute paths to `tts` and `Vroca.app` internally.
+   The package supplies absolute paths to `vroca` and `Vroca.app` internally.
 2. Verify its required permissions rather than adding a
    second hotkey helper.
 
@@ -140,13 +140,13 @@ in `mpv` aborts inside the build sandbox even with null audio. The existing
 `test_daemon.py` suite covers Linux selection fallback; Darwin-specific
 clipboard tests are still pending. Neither suite proves real audio output.
 
-After approved LaunchAgent activation, use `TTS_MPV_ARGS=--ao=null` for the
+After approved LaunchAgent activation, use `VROCA_MPV_ARGS=--ao=null` for the
 first lifecycle smoke test and inspect the agent with:
 
 ```sh
 launchctl print "gui/$(id -u)/org.nix-community.home.vroca"
-tts status
-tts say "macOS socket smoke test"
+vroca status
+vroca say "macOS socket smoke test"
 ```
 
 `x86_64-darwin` is not a current target: the pinned nixpkgs no longer supports

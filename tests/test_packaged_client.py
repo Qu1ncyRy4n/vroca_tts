@@ -35,7 +35,7 @@ class PackagedClientTests(unittest.TestCase):
         self.env["XDG_RUNTIME_DIR"] = str(runtime)
         errors = []
         with socket.socket(socket.AF_UNIX) as listener:
-            listener.bind(str(runtime / "tts.sock"))
+            listener.bind(str(runtime / "vroca.sock"))
             listener.listen(1)
             listener.settimeout(10)
 
@@ -71,7 +71,7 @@ class PackagedClientTests(unittest.TestCase):
         ]:
             with self.subTest(arguments=arguments):
                 self.exchange(arguments, " ".join(arguments))
-                (self.root / "run/tts.sock").unlink()
+                (self.root / "run/vroca.sock").unlink()
 
     def test_no_arguments_reads_selection(self):
         self.exchange([], "read")

@@ -1,6 +1,6 @@
 -- Nix substitutes absolute paths; Hammerspoon need not inherit a shell PATH.
 local M = { hotkeys = {}, tasks = {} }
-local tts = "@TTS@"
+local vroca = "@TTS@"
 local app = "@APP@"
 
 -- Match the developer's Linux/Speechify layout, with Option replacing Super.
@@ -16,10 +16,10 @@ M.defaultBindings = {
 
 function M.command(arguments)
     local task
-    task = hs.task.new(tts, function(code, stdout, stderr)
+    task = hs.task.new(vroca, function(code, stdout, stderr)
         M.tasks[task] = nil
         if code ~= 0 then
-            hs.alert.show("Vroca command failed; check the daemon and tts log")
+            hs.alert.show("Vroca command failed; check the daemon and vroca log")
         end
     end, arguments)
     if not task then
@@ -50,7 +50,7 @@ end
 
 -- Loading binds nothing. setup() enables the approved defaults; setup({})
 -- enables nothing, and a supplied table replaces the defaults.
--- Each entry has mods, key, and either args (a tts argument list) or panel=true.
+-- Each entry has mods, key, and either args (a vroca argument list) or panel=true.
 function M.setup(bindings)
     M.stop()
     for _, binding in ipairs(bindings or M.defaultBindings) do

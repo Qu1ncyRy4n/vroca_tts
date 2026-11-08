@@ -30,9 +30,9 @@ from engines import (
 )
 
 RUNTIME = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
-SOCK = os.path.join(RUNTIME, "tts.sock")
-STATE = os.path.join(RUNTIME, "tts-state.json")
-MODE_FILE = os.path.join(RUNTIME, "tts-mode")
+SOCK = os.path.join(RUNTIME, "vroca.sock")
+STATE = os.path.join(RUNTIME, "vroca-state.json")
+MODE_FILE = os.path.join(RUNTIME, "vroca-mode")
 PREFS = os.path.join(CONFIG_DIR, "prefs.json")
 
 SPEED_MIN, SPEED_MAX, SPEED_STEP = 0.5, 3.0, 0.15
@@ -115,11 +115,11 @@ class Mpv:
         # path was unconditionally unlinked at startup, so a second daemon
         # broke the first daemon's player IPC, not only its public socket.
         # A per-pid path needs no unlink and no ownership contest.
-        self.sock_path = os.path.join(RUNTIME, f"tts-mpv-{os.getpid()}.sock")
-        # TTS_MPV_ARGS exists for testing: `--ao=null` exercises the full
+        self.sock_path = os.path.join(RUNTIME, f"vroca-mpv-{os.getpid()}.sock")
+        # VROCA_MPV_ARGS exists for testing: `--ao=null` exercises the full
         # playback path without touching the real audio device.
         import shlex
-        extra = shlex.split(os.environ.get("TTS_MPV_ARGS", ""))
+        extra = shlex.split(os.environ.get("VROCA_MPV_ARGS", ""))
         self.proc = subprocess.Popen(
             ["mpv", "--idle=yes", "--no-video", "--no-terminal",
              "--keep-open=no", f"--input-ipc-server={self.sock_path}"] + extra,
@@ -230,7 +230,7 @@ class Reader:
         self.rendering = None
         self.spans = {}
         self.word = -1
-        self.tmp = tempfile.mkdtemp(prefix="tts-", dir=RUNTIME)
+        self.tmp = tempfile.mkdtemp(prefix="vroca-", dir=RUNTIME)
         self.lock = threading.RLock()
         self.dump_lock = threading.Lock()
         self.wake = threading.Event()
@@ -472,11 +472,11 @@ class Reader:
     def voices(self):
         if self.engine == "remote":
             return len(RemoteEngine(
-                os.environ.get("TTS_API_BASE", ""),
-                os.environ.get("TTS_API_MODEL", "tts-1"),
-                os.environ.get("TTS_API_KEY_FILE", ""),
+                os.environ.get("VROCA_API_BASE", ""),
+                os.environ.get("VROCA_API_MODEL", "tts-1"),
+                os.environ.get("VROCA_API_KEY_FILE", ""),
                 [v.strip() for v in os.environ.get(
-                    "TTS_API_VOICES", "alloy,echo,fable,onyx,nova,shimmer").split(",")],
+                    "VROCA_API_VOICES", "alloy,echo,fable,onyx,nova,shimmer").split(",")],
             ).voices)
         if self.engine == "zipvoice":
             return max(1, len(list_clone_refs()))
@@ -1022,7 +1022,7 @@ def write_wav(path, samples, rate):
 
 
 def load_pitch_table(engine):
-    d = os.environ.get("TTS_PITCH_DIR", "")
+    d = os.environ.get("VROCA_PITCH_DIR", "")
     if not d:
         return {}
     try:
@@ -1099,11 +1099,11 @@ def main():
     # Refuse duplicates before loading models or registering cleanup. A losing
     # instance must never unlink the live owner's public socket or snapshot.
     if _socket_owner_live(SOCK):
-        print("tts.sock is already owned by a live daemon; refusing to start",
+        print("vroca.sock is already owned by a live daemon; refusing to start",
               file=sys.stderr)
         sys.exit(1)
-    model_dirs = json.loads(os.environ["TTS_MODEL_DIRS"])
-    threads = int(os.environ.get("TTS_THREADS", "4"))
+    model_dirs = json.loads(os.environ["VROCA_MODEL_DIRS"])
+    threads = int(os.environ.get("VROCA_THREADS", "4"))
     prefs = load_prefs()
     engine = prefs.get("engine", DEFAULT_ENGINE)
     if engine not in ENGINES and not (
@@ -1151,7 +1151,7 @@ def main():
     if isinstance(sid, int) and 0 <= sid < reader.voices():
         reader.sid = sid
     if _socket_owner_live(SOCK):
-        print("tts.sock is already owned by a live daemon; refusing to start",
+        print("vroca.sock is already owned by a live daemon; refusing to start",
               file=sys.stderr)
         sys.exit(1)
     try:
@@ -1200,7 +1200,7 @@ def main():
             elif cmd == "mode":
                 reply = cycle_mode()
             elif verb == "mode_set":
-                # N14: the panel used to write tts-mode directly, violating
+                # N14: the panel used to write vroca-mode directly, violating
                 # the sole-owner rule. It now sends this operation; the daemon
                 # stays the only writer of the mode file.
                 if rest in MODES:

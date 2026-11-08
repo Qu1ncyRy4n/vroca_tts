@@ -20,13 +20,13 @@ Build the command bundle from the local checkout:
 ```sh
 cd ~/dev/exocortex/vroca_tts
 nix build
-./result/bin/tts-daemon
+./result/bin/vroca-daemon
 ```
 
-In another terminal, run `./result/bin/tts say "Hello from Vroca."`.
+In another terminal, run `./result/bin/vroca say "Hello from Vroca."`.
 For declarative installation and login startup, see
 [`docs/installation.md`](docs/installation.md). The package supports Linux and
-Apple Silicon macOS. Run `./result/bin/tts-panel` for controls, or on Mac
+Apple Silicon macOS. Run `./result/bin/vroca-panel` for controls, or on Mac
 `open ./result/Applications/Vroca.app`. See the install guide for the packaged
 Hammerspoon module and optional hotkeys.
 

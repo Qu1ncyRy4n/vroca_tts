@@ -64,7 +64,7 @@ Python is the production system. Recently fixed and live:
 
 Eighteen commits fixed the process-safety, input-safety, and semantics
 findings of the mismatch register, each CLI-tested against an isolated
-daemon (short `XDG_RUNTIME_DIR`, `TTS_MPV_ARGS=--ao=null`):
+daemon (short `XDG_RUNTIME_DIR`, `VROCA_MPV_ARGS=--ao=null`):
 
 | Finding | Fix |
 |:---|:---|
@@ -84,7 +84,7 @@ daemon (short `XDG_RUNTIME_DIR`, `TTS_MPV_ARGS=--ao=null`):
 | D7 | Startup refuses when a live daemon owns the socket; stale sockets still recoverable |
 | N4 | mpv death surfaces as `player_alive: false` plus a journal line; daemon keeps serving |
 | N2, D9, N3 | atexit cleanup removes sockets, snapshot, and tmpdir and terminates mpv; SIGTERM raises cleanly; `quit` cleans up |
-| N14 | Panel sends `mode_set`; daemon is the sole writer of `tts-mode` |
+| N14 | Panel sends `mode_set`; daemon is the sole writer of `vroca-mode` |
 | N18, N19, N20, D6 | Panel: catalogue fetch gated on load state, sliders span the daemon ranges, start retries every 3 s with a journal hint after 30 s |
 
 Already true before the sweep, verified rather than re-fixed: N11 and N13
@@ -144,9 +144,9 @@ For daemon behavior, run an isolated daemon rather than touching the live one:
 
 ```sh
 T=/tmp/vt$$; mkdir -p "$T/cfg"          # keep the path SHORT
-MD="$(tr '\0' '\n' < /proc/$(systemctl --user show tts.service -p MainPID --value)/environ \
-      | grep '^TTS_MODEL_DIRS=' | cut -d= -f2-)"
-XDG_RUNTIME_DIR="$T" XDG_CONFIG_HOME="$T/cfg" TTS_MODEL_DIRS="$MD" \
+MD="$(tr '\0' '\n' < /proc/$(systemctl --user show vroca.service -p MainPID --value)/environ \
+      | grep '^VROCA_MODEL_DIRS=' | cut -d= -f2-)"
+XDG_RUNTIME_DIR="$T" XDG_CONFIG_HOME="$T/cfg" VROCA_MODEL_DIRS="$MD" \
   nix develop --command python3 python_impl/daemon.py &
 ```
 
@@ -236,7 +236,7 @@ competing priority order.
 2. **Deploy the Python sweep**: update `vroca_tts` in `~/dev/nix-config`,
 review and commit `flake.lock`, then rebuild the target host (each step is
 approval-sensitive). Verify with
-   `tts speed abc` (typed error), a second `tts-daemon` start (refusal), and
+   `vroca speed abc` (typed error), a second `vroca-daemon` start (refusal), and
    `quit` + socket check (clean exit).
 3. **Run `scripts/multivoice_demo.py`.** The overlapping half is an experiment,
    not a demo: it can inform overlap implementation and intelligibility checks.

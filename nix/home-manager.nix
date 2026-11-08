@@ -17,7 +17,7 @@ in
       type = lib.types.package;
       default = pkgs.callPackage ./package.nix { };
       defaultText = lib.literalExpression "pkgs.callPackage ./nix/package.nix { }";
-      description = "Vroca package providing bin/tts and bin/tts-daemon.";
+      description = "Vroca package providing bin/vroca and bin/vroca-daemon.";
     };
   };
 
@@ -33,19 +33,19 @@ in
         home.packages = [ cfg.package ];
       }
       (lib.mkIf isLinux {
-        systemd.user.services.tts = {
+        systemd.user.services.vroca = {
           Unit = {
             Description = "Vroca speech synthesis daemon";
             PartOf = [ "graphical-session.target" ];
             After = [ "graphical-session.target" ];
           };
           Service = {
-            ExecStart = "${cfg.package}/bin/tts-daemon";
+            ExecStart = "${cfg.package}/bin/vroca-daemon";
             Restart = "on-failure";
             RestartSec = 3;
             # Keep credentials in the existing user-managed file, never in a
             # derivation or a module option containing secret values.
-            EnvironmentFile = "-%E/tts/env";
+            EnvironmentFile = "-%E/vroca/env";
             Environment = [ "XDG_CONFIG_HOME=${config.xdg.configHome}" ];
           };
           Install.WantedBy = [ "graphical-session.target" ];
@@ -61,9 +61,9 @@ in
           enable = true;
           # Home Manager installs enabled agents in gui/$UID.
           config = {
-            ProgramArguments = [ "${cfg.package}/bin/tts-daemon" ];
+            ProgramArguments = [ "${cfg.package}/bin/vroca-daemon" ];
             RunAtLoad = true;
-            # Match systemd Restart=on-failure: `tts quit` must stay stopped.
+            # Match systemd Restart=on-failure: `vroca quit` must stay stopped.
             KeepAlive.SuccessfulExit = false;
             ThrottleInterval = 3;
             ProcessType = "Background";

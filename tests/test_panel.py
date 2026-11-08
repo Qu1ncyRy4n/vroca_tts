@@ -27,7 +27,7 @@ class PanelSmoke(unittest.TestCase):
                      engines=["kokoro"], aligner="asr")
         with tempfile.TemporaryDirectory(prefix="vroca-panel-", dir="/tmp") as tmp:
             server = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            server.bind(tmp + "/tts.sock")
+            server.bind(tmp + "/vroca.sock")
             server.listen()
             server.settimeout(0.1)
             stop = threading.Event()
@@ -72,8 +72,8 @@ class PanelSmoke(unittest.TestCase):
                 self.fail("GTK condition timed out; commands: " + repr(commands))
 
             try:
-                with patch.object(panel, "SOCK", tmp + "/tts.sock"), \
-                     patch.object(panel, "MODE_FILE", tmp + "/tts-mode"):
+                with patch.object(panel, "SOCK", tmp + "/vroca.sock"), \
+                     patch.object(panel, "MODE_FILE", tmp + "/vroca-mode"):
                     self.assertTrue(app.register(None))
                     app.activate()
                     pump_until(lambda: app.store.get_n_items() == 1)

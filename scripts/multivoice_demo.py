@@ -58,19 +58,19 @@ OVERLAP = [
 
 
 def model_dirs():
-    """Find TTS_MODEL_DIRS without making the caller export it.
+    """Find VROCA_MODEL_DIRS without making the caller export it.
 
     The value is a Nix store map that only the packaged daemon knows, so
     requiring it in the environment made this script unrunnable from an ordinary
     shell. Read it from the running daemon instead, which is where it already
     is.
     """
-    if os.environ.get("TTS_MODEL_DIRS"):
-        return json.loads(os.environ["TTS_MODEL_DIRS"]), int(
-            os.environ.get("TTS_THREADS", "4"))
+    if os.environ.get("VROCA_MODEL_DIRS"):
+        return json.loads(os.environ["VROCA_MODEL_DIRS"]), int(
+            os.environ.get("VROCA_THREADS", "4"))
     try:
         pid = subprocess.run(
-            ["systemctl", "--user", "show", "tts.service", "-p", "MainPID", "--value"],
+            ["systemctl", "--user", "show", "vroca.service", "-p", "MainPID", "--value"],
             capture_output=True, text=True, timeout=5).stdout.strip()
     except (OSError, subprocess.SubprocessError):
         pid = ""
@@ -79,19 +79,19 @@ def model_dirs():
             with open(f"/proc/{pid}/environ", "rb") as f:
                 env = dict(
                     kv.split(b"=", 1) for kv in f.read().split(b"\0") if b"=" in kv)
-            raw = env.get(b"TTS_MODEL_DIRS")
+            raw = env.get(b"VROCA_MODEL_DIRS")
             if raw:
                 return (json.loads(raw.decode()),
-                        int(env.get(b"TTS_THREADS", b"4").decode()))
+                        int(env.get(b"VROCA_THREADS", b"4").decode()))
         except (OSError, ValueError):
             pass
     sys.exit(
         "Could not find the model paths.\n"
         "They live in the Nix store and are known to the packaged daemon, so\n"
         "either start it:\n"
-        "    systemctl --user start tts\n"
+        "    systemctl --user start vroca\n"
         "or set them yourself:\n"
-        "    export TTS_MODEL_DIRS='{\"libritts\": \"/nix/store/...\"}'")
+        "    export VROCA_MODEL_DIRS='{\"libritts\": \"/nix/store/...\"}'")
 
 
 def daemon_supports_per_item_voice(send):
@@ -164,7 +164,7 @@ def via_daemon(lines):
     it was finally rendered. The voice has to travel with the item.
     """
     import socket
-    sock = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "tts.sock")
+    sock = os.path.join(os.environ.get("XDG_RUNTIME_DIR", "/tmp"), "vroca.sock")
 
     def send(cmd):
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -181,7 +181,7 @@ def via_daemon(lines):
         return out.decode()
 
     if not os.path.exists(sock):
-        sys.exit("daemon not running: systemctl --user start tts")
+        sys.exit("daemon not running: systemctl --user start vroca")
     print(f"\n--- VIA DAEMON: engine {ENGINE}, per-item voices ---")
     print(" ", send(f"engine {ENGINE}"))
     print(" ", send("stop"))

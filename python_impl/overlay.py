@@ -5,7 +5,7 @@ A GTK4 layer-shell surface: on Wayland an ordinary toplevel can't reliably
 stay above others or refuse focus, and stealing focus mid-read would defeat
 the point. Layer-shell gives an always-on-top, click-through, never-focused strip.
 
-Renders whatever `tts-state.json` says. The daemon owns all state; this only draws.
+Renders whatever `vroca-state.json` says. The daemon owns all state; this only draws.
 MODES contains "subtitle", "rsvp", and "scroll_rsvp".
 """
 import json
@@ -20,8 +20,8 @@ gi.require_version("Gtk4LayerShell", "1.0")
 from gi.repository import GLib, Gtk, Gtk4LayerShell as LayerShell  # noqa: E402
 
 RUNTIME = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
-STATE = os.path.join(RUNTIME, "tts-state.json")
-MODE_FILE = os.path.join(RUNTIME, "tts-mode")
+STATE = os.path.join(RUNTIME, "vroca-state.json")
+MODE_FILE = os.path.join(RUNTIME, "vroca-mode")
 POLL_MS = 50
 
 CSS = b"""

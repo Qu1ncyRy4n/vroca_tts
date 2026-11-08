@@ -13,7 +13,7 @@ hs = {
         return binding
     end },
     task = { new = function(path, callback, args)
-        assert(path:match("/bin/tts$"))
+        assert(path:match("/bin/vroca$"))
         local task = { callback=callback, args=args }
         function task:start() return self end
         table.insert(tasks, task)

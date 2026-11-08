@@ -17,12 +17,12 @@ opts into it and only through a caller-owned audio sink or a dedicated playback
 channel. It must never be an accidental result of two requests arriving close
 together.
 
-This recommendation preserves all existing `tts.sock` commands. The new API is
+This recommendation preserves all existing `vroca.sock` commands. The new API is
 additive and lives on a second socket.
 
 ## 2. What Exists Today
 
-The Python daemon exposes one request per connection on `tts.sock`. A client
+The Python daemon exposes one request per connection on `vroca.sock`. A client
 writes one plaintext command such as `say`, `queue`, `stop`, or `status`, reads
 one plaintext reply, and closes. All callers share one queue, one active item,
 and one `mpv` player.
@@ -271,7 +271,7 @@ case.
 
 ## 9. Compatibility And Documentation
 
-`tts.sock`, its plaintext commands, `tts-state.json`, and the current overlay
+`vroca.sock`, its plaintext commands, `vroca-state.json`, and the current overlay
 remain intact during migration. The legacy `say` command retains its documented
 global replacement behavior. The structured API defaults to channel scope,
 which is deliberately safer for multi-caller applications.

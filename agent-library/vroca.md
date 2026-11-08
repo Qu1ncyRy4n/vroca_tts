@@ -68,9 +68,9 @@ universal build, service, or shell permission.
 | Enter the project environment | `nix develop` | May contact the local Nix daemon and fetch cached dependencies. |
 | Evaluate the flake | `nix flake check --no-build`, `nix flake metadata --json`, `nix eval` | Read-only evaluation. |
 | Build a known output | `nix build --no-link <exact-attribute>` | Show the exact attribute first. Do not request a broad build rule. |
-| Inspect the live service | `systemctl --user show tts.service`, `journalctl --user -u tts.service` | Read-only. |
-| Query daemon state | `tts status` | Read-only socket request. |
-| Change live playback or service state | `tts <mutation>`, `systemctl --user restart tts` | Describe the expected process and cleanup path first. Request approval for the exact action. |
+| Inspect the live service | `systemctl --user show vroca.service`, `journalctl --user -u vroca.service` | Read-only. |
+| Query daemon state | `vroca status` | Read-only socket request. |
+| Change live playback or service state | `vroca <mutation>`, `systemctl --user restart vroca` | Describe the expected process and cleanup path first. Request approval for the exact action. |
 | Change deployment | patch files under `~/dev/nix-config` | Separate repository and activation boundary. Ask before writing or activating. |
 | Update deployed Vroca | `nix flake update vroca_tts` in `~/dev/nix-config` | Changes the pinned source revision and `flake.lock`; inspect and commit it before a rebuild. |
 

@@ -43,13 +43,13 @@ Finding identifiers (`D#`, `N#`) refer to the mismatch register in
 
 | Item | Python behavior | Rust compatibility target | Finding |
 | --- | --- | --- | --- |
-| Path | `$XDG_RUNTIME_DIR/tts.sock` | Preserve byte-identically during staged migration. | — |
+| Path | `$XDG_RUNTIME_DIR/vroca.sock` | Preserve byte-identically during staged migration. | — |
 | Transport | Unix stream socket | Preserve for legacy clients. | — |
 | Framing | One request, one response, connection close | Preserve. | — |
 | Encoding | UTF-8 in, replacement decoding on invalid bytes | Preserve for legacy. Structured protocol MUST reject invalid UTF-8 instead. | N6 |
 | Request limit | One `recv(4096)`; longer input truncated, possibly mid-UTF-8 | Set an explicit limit; over-limit input MUST produce `invalid_request`, never truncation. Limit value is Open (`rust-spec.md` §7.8). | N6 |
 | Response write | `conn.send()` with the return value discarded | MUST use a full write. The libritts `catalogue` response measures **101,359 bytes** against roughly 106 KB of effective buffer — under 5% margin, shrinking as voices are added. | N5 |
-| Whitespace | `strip()` before dispatch, so `tts say ""` becomes `unknown: say` and surrounding whitespace in text is lost | Decide explicitly; preserve interior text exactly. | N7 |
+| Whitespace | `strip()` before dispatch, so `vroca say ""` becomes `unknown: say` and surrounding whitespace in text is lost | Decide explicitly; preserve interior text exactly. | N7 |
 | Invalid numerics | `float()`/`int()` raise and **terminate the daemon** | MUST become a typed error. Non-negotiable. | D8 |
 | Second socket | none | `vroca-v1.sock` bound in slice 2. Permissions Open (§7.3). | → DEC-3 |
 | Trust boundary | socket is `0666` inside a `0700` runtime directory | Legacy keeps `0666` for compatibility. The real boundary is the owning user and MUST be documented as such. | D11 |
@@ -79,7 +79,7 @@ Finding identifiers (`D#`, `N#`) refer to the mismatch register in
 | `font_size INTEGER` | Clamps 12–72. **Malformed integer kills the daemon.** Panel slider is only 14–48. | → **DEC-17**. Clamping MUST be reported, not silent. Panel range must match the daemon. Resolves N19. | V in range; V clamped both ends with report; **M `font_size abc` — daemon MUST survive**; R; S; E |
 | `words_visible INTEGER` | Clamps 1–15. **Malformed integer kills the daemon.** Panel slider is only 1–9. | → **DEC-17**. As above. Resolves N20. | V in range; V clamped both ends with report; **M malformed — daemon MUST survive**; R; S; E |
 | `position NAME` | Sets `bottom`, `top`, or `center`. In both RSVP modes, `bottom` and `center` render identically. | Resolve N21: either make `bottom` mean bottom in RSVP, or document that RSVP supports two positions. Currently undecided. | V all three values in `subtitle`; V all three in `rsvp` and `scroll_rsvp` documenting actual anchor; M unknown name; R; S; E |
-| `mode` | Cycles the separate `tts-mode` file. | → **DEC-7**. Daemon becomes sole owner; mode moves into `prefs.json`; `tts-mode` becomes a read-only mirror. Resolves N14. | V full cycle `subtitle → rsvp → scroll_rsvp → off → subtitle`; V from an unknown file value; R new mode name; S prefs updated **and** mirror refreshed; E unwritable mirror |
+| `mode` | Cycles the separate `vroca-mode` file. | → **DEC-7**. Daemon becomes sole owner; mode moves into `prefs.json`; `vroca-mode` becomes a read-only mirror. Resolves N14. | V full cycle `subtitle → rsvp → scroll_rsvp → off → subtitle`; V from an unknown file value; R new mode name; S prefs updated **and** mirror refreshed; E unwritable mirror |
 | `reset`, `reset_prefs` | Restores some prefs, writes mode `subtitle`, **leaves engine unchanged**, **does not clear the cache**. | → **DEC-15**. Intentional change: resets everything including engine, stops playback, clears cache. Resolves N8 and N9. | V both verbs identical; V engine reset proven; V cache empty after; R; S every field at default; E |
 | `status` | Returns pretty-printed JSON snapshot, 20 fields. | → **DEC-8**, **DEC-17**. Fields preserved; gains a schema version. | V full field set; V while idle; V while playing; R exact field names and JSON shape; S none; E daemon degraded still answers |
 | `catalogue` | Returns JSON voice metadata for the current engine. **101,359 bytes for libritts.** | → **DEC-10**, **DEC-11**. Shape preserved or versioned; entries gain stable `VoiceId` and separated traits. | V per engine (kokoro named, libritts/supertonic generated, zipvoice from filenames); **V large-response integrity — full 101 KB body received (N5)**; R; S none; E engine unloaded (N18) |
@@ -99,10 +99,10 @@ a separate ownership boundary. These are its observed behaviors.
 
 | Behavior | Python client | Rust target | Finding |
 | --- | --- | --- | --- |
-| Argument forwarding | Remaining arguments forwarded only for `say`, `speak`, `queue`. `tts speed 1.2` sends bare `speed`. | The Rust CLI MUST NOT copy this limitation. | D5 |
-| No arguments | Bare `tts` means `read`. | Undocumented. Decide whether to keep; document either way. | N22 |
-| `tts log` | Client-side `journalctl --user -u tts -u tts-overlay -f`. Never reaches the socket. | Undocumented. Keep as a CLI-only subcommand. | N22 |
-| Missing daemon | Prints an error and exits 1. Does **not** auto-start. | The panel does the opposite (spawns `systemctl --user start tts`). Policy is Open (`rust-spec.md` §7.2). | N23, D6 |
+| Argument forwarding | Remaining arguments forwarded only for `say`, `speak`, `queue`. `vroca speed 1.2` sends bare `speed`. | The Rust CLI MUST NOT copy this limitation. | D5 |
+| No arguments | Bare `vroca` means `read`. | Undocumented. Decide whether to keep; document either way. | N22 |
+| `vroca log` | Client-side `journalctl --user -u vroca -u vroca-overlay -f`. Never reaches the socket. | Undocumented. Keep as a CLI-only subcommand. | N22 |
+| Missing daemon | Prints an error and exits 1. Does **not** auto-start. | The panel does the opposite (spawns `systemctl --user start vroca`). Policy is Open (`rust-spec.md` §7.2). | N23, D6 |
 
 CLI fixtures MUST cover argument parsing, standard output, standard error, and
 exit status **separately** from socket fixtures.
@@ -113,12 +113,12 @@ exit status **separately** from socket fixtures.
 
 | Path | Current writers | Rust target | Finding |
 | --- | --- | --- | --- |
-| `tts-state.json` | daemon only, atomic | Gains schema version. Written on state change, **not** on every mpv position tick. Must be detectably stale after daemon exit. | N16, → DEC-8 |
-| `tts-mode` | **daemon and panel** | Daemon only, as a read-only mirror of a `prefs.json` field. | N14, → DEC-7 |
+| `vroca-state.json` | daemon only, atomic | Gains schema version. Written on state change, **not** on every mpv position tick. Must be detectably stale after daemon exit. | N16, → DEC-8 |
+| `vroca-mode` | **daemon and panel** | Daemon only, as a read-only mirror of a `prefs.json` field. | N14, → DEC-7 |
 | `prefs.json` | daemon only, atomic; corrupt file silently reverts every setting | Gains schema version, explicit migration, unknown-field preservation, and quarantine-plus-report on corruption. | → DEC-17 |
-| `tts-mpv.sock` | daemon; path unconditionally unlinked at startup | Per-instance path. No daemon may unlink a path it does not own. | N1, → DEC-9 |
-| `tts-<rand>/` | daemon; never removed (61 observed) | Removed on shutdown. | N2, → DEC-9 |
-| `tts.sock` | daemon; unconditionally unlinked at startup | MUST prove no live owner exists before unlinking. | D7 |
+| `vroca-mpv.sock` | daemon; path unconditionally unlinked at startup | Per-instance path. No daemon may unlink a path it does not own. | N1, → DEC-9 |
+| `vroca-<rand>/` | daemon; never removed (61 observed) | Removed on shutdown. | N2, → DEC-9 |
+| `vroca.sock` | daemon; unconditionally unlinked at startup | MUST prove no live owner exists before unlinking. | D7 |
 
 ---
 
@@ -129,7 +129,7 @@ Fixtures MUST also cover:
 - missing, malformed, and unknown preference fields;
 - every current `prefs.json` field, plus the new `overlay_mode` (D7) and
   `schema` (DEC-17);
-- every current `tts-state.json` field;
+- every current `vroca-state.json` field;
 - migration from the unversioned Python format to schema 1;
 - unknown fields surviving a read-modify-write cycle (downgrade safety);
 - a corrupt preferences file being quarantined, defaults applied, and the

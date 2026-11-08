@@ -20,8 +20,8 @@ class PackagedDaemonTests(unittest.TestCase):
             root = Path(directory)
             env = {**os.environ, "HOME": directory,
                    "XDG_CONFIG_HOME": str(root / "config"),
-                   "TTS_MPV_ARGS": "--ao=null"}
-            for name in ("XDG_RUNTIME_DIR", "TTS_API_BASE", "TTS_API_KEY_FILE"):
+                   "VROCA_MPV_ARGS": "--ao=null"}
+            for name in ("XDG_RUNTIME_DIR", "VROCA_API_BASE", "VROCA_API_KEY_FILE"):
                 env.pop(name, None)
             runtime = root / "Library/Caches/vroca"
             if sys.platform != "darwin":
@@ -31,7 +31,7 @@ class PackagedDaemonTests(unittest.TestCase):
 
             def command(*args):
                 result = subprocess.run(
-                    [str(BIN / "tts"), *args], env=env,
+                    [str(BIN / "vroca"), *args], env=env,
                     capture_output=True, text=True, timeout=20,
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
@@ -40,12 +40,12 @@ class PackagedDaemonTests(unittest.TestCase):
             log_path = root / "daemon.log"
             with log_path.open("w") as log:
                 process = subprocess.Popen(
-                    [str(BIN / "tts-daemon")], env=env,
+                    [str(BIN / "vroca-daemon")], env=env,
                     stdout=log, stderr=log, start_new_session=True,
                 )
                 try:
                     deadline = time.monotonic() + 90
-                    while not (runtime / "tts.sock").exists():
+                    while not (runtime / "vroca.sock").exists():
                         if process.poll() is not None or time.monotonic() > deadline:
                             self.fail("daemon did not start:\n" + log_path.read_text())
                         time.sleep(0.1)
@@ -54,14 +54,14 @@ class PackagedDaemonTests(unittest.TestCase):
                     self.assertEqual(snapshot["engine"], "kokoro")
                     self.assertTrue(snapshot["player_alive"])
                     self.assertEqual(stat.S_IMODE(runtime.stat().st_mode), 0o700)
-                    socket_inode = (runtime / "tts.sock").stat().st_ino
+                    socket_inode = (runtime / "vroca.sock").stat().st_ino
                     duplicate = subprocess.run(
-                        [str(BIN / "tts-daemon")], env=env,
+                        [str(BIN / "vroca-daemon")], env=env,
                         capture_output=True, text=True, timeout=20,
                     )
                     self.assertNotEqual(duplicate.returncode, 0)
                     self.assertIn("already owned by a live daemon", duplicate.stderr)
-                    self.assertEqual((runtime / "tts.sock").stat().st_ino, socket_inode)
+                    self.assertEqual((runtime / "vroca.sock").stat().st_ino, socket_inode)
                     self.assertIsNone(process.poll())
                     self.assertTrue(json.loads(command("status"))["player_alive"])
                     catalogue = json.loads(command("catalogue"))
@@ -86,12 +86,12 @@ class PackagedDaemonTests(unittest.TestCase):
                         if time.monotonic() > deadline:
                             self.fail("synthesis did not finish:\n" + log_path.read_text())
                         time.sleep(0.1)
-                    self.assertTrue(list(runtime.glob("tts-*/*.wav")))
+                    self.assertTrue(list(runtime.glob("vroca-*/*.wav")))
                     self.assertEqual(command("quit"), "bye")
                     self.assertEqual(process.wait(timeout=10), 0)
-                    self.assertFalse((runtime / "tts.sock").exists())
-                    self.assertFalse((runtime / "tts-state.json").exists())
-                    self.assertFalse(list(runtime.glob("tts-*")))
+                    self.assertFalse((runtime / "vroca.sock").exists())
+                    self.assertFalse((runtime / "vroca-state.json").exists())
+                    self.assertFalse(list(runtime.glob("vroca-*")))
                 finally:
                     # Own a separate process group so a failed assertion cannot
                     # leak this test's daemon/player into the developer session.

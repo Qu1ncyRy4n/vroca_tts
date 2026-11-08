@@ -67,7 +67,7 @@ let
       hash = "sha256-+/KdxdOywTff0LFay/9+RUjm16zlfzNawX+bX5BAWXk=";
     };
     # Zero-shot voice cloning from a reference clip. RTF 0.55 measured here.
-    # Only offered when ~/.config/tts/voices has wavs in it.
+    # Only offered when ~/.config/vroca/voices has wavs in it.
     zipvoice = fetchModel {
       name = "tts-zipvoice";
       url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/sherpa-onnx-zipvoice-distill-int8-zh-en-emilia.tar.bz2";
@@ -106,7 +106,7 @@ let
   # Supertonic and LibriTTS ship no voice names, so the catalogue describes them
   # by measured pitch. Done here rather than at daemon start: 904 libritts
   # voices is ~1min of synthesis, which nobody wants on every login.
-  pitchTables = runCommand "tts-pitch-tables" { nativeBuildInputs = [ pyEnv ]; } ''
+  pitchTables = runCommand "vroca-pitch-tables" { nativeBuildInputs = [ pyEnv ]; } ''
     mkdir -p $out
     for e in supertonic libritts; do
       case $e in
@@ -144,19 +144,19 @@ let
   ];
 
   daemon = writeShellApplication {
-    name = "tts-daemon";
+    name = "vroca-daemon";
     runtimeInputs = runtimeDeps ++ [ pyEnv ];
     text = ''
       ${runtime.environment}
       ${runtime.prepare}
-      export TTS_MODEL_DIRS=${lib.escapeShellArg modelDirs}
-      export TTS_PITCH_DIR=${pitchTables}
+      export VROCA_MODEL_DIRS=${lib.escapeShellArg modelDirs}
+      export VROCA_PITCH_DIR=${pitchTables}
       # 4, not 8: onnxruntime oversubscribes the 4 physical cores and 8
       # measured *slower* (RTF 0.97 -> 1.30 on kokoro).
-      export TTS_THREADS=4
-      # TTS_API_BASE / TTS_API_KEY_FILE are deliberately NOT set here.
+      export VROCA_THREADS=4
+      # VROCA_API_BASE / VROCA_API_KEY_FILE are deliberately NOT set here.
       # Remote-provider settings come from the user unit's
-      # EnvironmentFile=-%E/tts/env: a key written into a derivation
+      # EnvironmentFile=-%E/vroca/env: a key written into a derivation
       # ends up in /nix/store, which is world readable.
       export PYTHONPATH=${src}
       exec python3 ${src}/daemon.py
@@ -166,7 +166,7 @@ let
   # Subtitle strip along the bottom edge. Linux-only: it needs the wlroots
   # layer-shell protocol.
   overlay = writeShellApplication {
-    name = "tts-overlay";
+    name = "vroca-overlay";
     runtimeInputs = [
       (python3.withPackages (
         ps: with ps; [
@@ -189,7 +189,7 @@ let
 
   # Plain toplevel on both platforms, so no layer-shell preload.
   panel = writeShellApplication {
-    name = "tts-panel";
+    name = "vroca-panel";
     passthru.typelibs = gtkTypelibs;
     runtimeInputs = [
       (python3.withPackages (
@@ -211,7 +211,7 @@ let
   macApp = runCommand "vroca-mac-app" { } ''
     app="$out/Applications/Vroca.app/Contents"
     mkdir -p "$app/MacOS"
-    ln -s ${panel}/bin/tts-panel "$app/MacOS/Vroca"
+    ln -s ${panel}/bin/vroca-panel "$app/MacOS/Vroca"
     cat > "$app/Info.plist" <<'PLIST'
     <?xml version="1.0" encoding="UTF-8"?>
     <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -227,7 +227,7 @@ let
   '';
 
   hammerspoonLua = writeText "vroca.lua" (
-    lib.replaceStrings [ "@TTS@" "@APP@" ] [ "${ttsctl}/bin/tts" "${macApp}/Applications/Vroca.app" ] (
+    lib.replaceStrings [ "@TTS@" "@APP@" ] [ "${ttsctl}/bin/vroca" "${macApp}/Applications/Vroca.app" ] (
       builtins.readFile ../integrations/hammerspoon/vroca.lua
     )
   );
@@ -239,7 +239,7 @@ let
   # One client for every binding. socat rather than a second python start-up:
   # a keypress should not pay interpreter boot time.
   ttsctl = writeShellApplication {
-    name = "tts";
+    name = "vroca";
     runtimeInputs = [
       socat
       coreutils
@@ -251,7 +251,7 @@ let
         ${
           if isLinux then
             ''
-              exec journalctl --user -u tts -u tts-overlay -f
+              exec journalctl --user -u vroca -u vroca-overlay -f
             ''
           else
             ''
@@ -259,9 +259,19 @@ let
             ''
         }
       fi
-      ${builtins.readFile ./tts.sh}
+      ${builtins.readFile ./vroca.sh}
     '';
   };
+
+  # ponytail: `tts*` compatibility aliases for existing bindings; drop once
+  # nix-config hotkeys and services reference `vroca*`.
+  legacyAliases = runCommand "vroca-legacy-aliases" { } ''
+    mkdir -p "$out/bin"
+    ln -s ${ttsctl}/bin/vroca "$out/bin/tts"
+    ln -s ${daemon}/bin/vroca-daemon "$out/bin/tts-daemon"
+    ln -s ${panel}/bin/vroca-panel "$out/bin/tts-panel"
+    ${lib.optionalString isLinux ''ln -s ${overlay}/bin/vroca-overlay "$out/bin/tts-overlay"''}
+  '';
 
 in
 buildEnv {
@@ -270,6 +280,7 @@ buildEnv {
     daemon
     ttsctl
     panel
+    legacyAliases
   ]
   ++ lib.optionals isLinux [ overlay ]
   ++ lib.optionals isDarwin [
@@ -282,17 +293,17 @@ buildEnv {
     "/share"
   ];
   passthru = {
-    tts-daemon = daemon;
-    tts = ttsctl;
-    tts-panel = panel;
-    tts-pitch-tables = pitchTables;
+    vroca-daemon = daemon;
+    vroca-cli = ttsctl;
+    vroca-panel = panel;
+    vroca-pitch-tables = pitchTables;
   }
   // lib.optionalAttrs isLinux {
-    tts-overlay = overlay;
+    vroca-overlay = overlay;
   };
   meta = {
     description = "Speech synthesis and assistive reader";
-    mainProgram = "tts";
+    mainProgram = "vroca";
     platforms = [
       "x86_64-linux"
       "aarch64-linux"

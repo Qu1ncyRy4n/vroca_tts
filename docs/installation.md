@@ -13,8 +13,8 @@ Python files directly from the mutable checkout.
 
 | Platform | Default package commands |
 | --- | --- |
-| `x86_64-linux`, `aarch64-linux` | `tts`, `tts-daemon`, `tts-panel`, `tts-overlay` |
-| `aarch64-darwin` | `tts`, `tts-daemon`, `tts-panel`; `Applications/Vroca.app` |
+| `x86_64-linux`, `aarch64-linux` | `vroca`, `vroca-daemon`, `vroca-panel`, `vroca-overlay` |
+| `aarch64-darwin` | `vroca`, `vroca-daemon`, `vroca-panel`; `Applications/Vroca.app` |
 
 The existing local model set is included: Kokoro, Supertonic, LibriTTS,
 ZipVoice/vocoder, and ASR. Model downloads are hash-pinned Nix build inputs;
@@ -37,7 +37,7 @@ names are retained.
 
 The new unpacked hash is
 `sha256-X/mZcz8+AjfFfUDkpVJ0HOp+bT2uIy36I9RXMhl0qA4=`.
-The [upstream model guide](https://k2-fsa.github.io/sherpa/onnx/tts/pretrained_models/kokoro.html)
+The [upstream model guide](https://k2-fsa.github.io/sherpa/onnx/vroca/pretrained_models/kokoro.html)
 documents the original 53-voice mapping; the
 [downloaded release archive](https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/kokoro-int8-multi-lang-v1_0.tar.bz2)
 contains the update note. Future changes to the release asset will fail the
@@ -48,20 +48,20 @@ fixed-output hash check and require another review.
 ```sh
 cd ~/dev/exocortex/vroca_tts
 nix build
-./result/bin/tts-daemon
+./result/bin/vroca-daemon
 ```
 
 In another terminal:
 
 ```sh
 cd ~/dev/exocortex/vroca_tts
-./result/bin/tts status
-./result/bin/tts say "Vroca is ready."
-./result/bin/tts speed 1.2
-./result/bin/tts quit
+./result/bin/vroca status
+./result/bin/vroca say "Vroca is ready."
+./result/bin/vroca speed 1.2
+./result/bin/vroca quit
 ```
 
-Alternatively, `nix run .#tts-daemon` runs the foreground daemon and
+Alternatively, `nix run .#vroca-daemon` runs the foreground daemon and
 `nix run . -- status` runs the bundled client. Package installation alone does
 not start a daemon. Keep service-managed and foreground instances separate.
 
@@ -109,7 +109,7 @@ Changes to `~/dev/nix-config` require separate approval.
 
 The service installs only when enabled and starts only the daemon. Linux panel
 and overlay commands are included but are not started automatically.
-When adopting the module, replace an existing `tts` service declaration rather
+When adopting the module, replace an existing `vroca` service declaration rather
 than keeping two definitions of the same unit.
 
 ## Using The Overlay Or callPackage
@@ -131,8 +131,8 @@ pkgs.callPackage (vrocaSource + "/nix/package.nix") { }
 ```
 
 `vrocaSource` may be the local Git flake input. No overlay is required to use
-the Home Manager module. Existing flake outputs `tts`, `tts-daemon`,
-`tts-pitch-tables`, and `tts-panel` remain available; `tts-overlay` is Linux-only.
+the Home Manager module. Existing flake outputs `vroca`, `vroca-daemon`,
+`vroca-pitch-tables`, and `vroca-panel` remain available; `vroca-overlay` is Linux-only.
 The default output now contains the command bundle rather than just the daemon.
 
 ## Service And Runtime Behavior
@@ -141,11 +141,11 @@ Approved packaging choices, 2026-10-28:
 
 | Behavior | Linux | Apple Silicon macOS |
 | --- | --- | --- |
-| Service | systemd user unit `tts`, attached to the graphical session | Home Manager LaunchAgent `org.nix-community.home.vroca`, in the GUI session |
+| Service | systemd user unit `vroca`, attached to the graphical session | Home Manager LaunchAgent `org.nix-community.home.vroca`, in the GUI session |
 | Runtime | Existing `$XDG_RUNTIME_DIR`; legacy `/tmp` fallback when unset | `$XDG_RUNTIME_DIR` if supplied, otherwise `~/Library/Caches/vroca` |
-| Logs | `tts log` follows the service journal | `tts log` follows `~/Library/Logs/vroca.log` |
+| Logs | `vroca log` follows the service journal | `vroca log` follows `~/Library/Logs/vroca.log` |
 | Restart | On failure, after 3 seconds | On unsuccessful exit, throttled to 3 seconds |
-| `tts quit` | Clean shutdown; service stays stopped | Clean shutdown; agent stays stopped |
+| `vroca quit` | Clean shutdown; service stays stopped | Clean shutdown; agent stays stopped |
 
 The Mac daemon creates its runtime directory with mode `0700`; wrappers reject
 a symlink, non-directory, or directory owned by another user. The client never
@@ -157,13 +157,13 @@ Use the service manager to restart after `quit`:
 
 ```sh
 # Linux
-systemctl --user start tts
+systemctl --user start vroca
 
 # Mac, when the Home Manager agent has been activated
 launchctl kickstart "gui/$(id -u)/org.nix-community.home.vroca"
 ```
 
-Use `tts stop` to stop speech while leaving the daemon available.
+Use `vroca stop` to stop speech while leaving the daemon available.
 
 ## Mac Panel And Hotkeys
 
@@ -171,9 +171,9 @@ Build the default bundle, start the daemon in one terminal, then open the panel:
 
 ```sh
 nix build
-./result/bin/tts-daemon
+./result/bin/vroca-daemon
 # In another terminal:
-./result/bin/tts-panel
+./result/bin/vroca-panel
 # Or launch the Mac application:
 open ./result/Applications/Vroca.app
 ```
@@ -191,12 +191,12 @@ pause; **Previous** and **Next** move between sentences. These controls preserve
 the existing daemon API, allowing a later Rust daemon to replace Python.
 
 For a manual check, copy a short paragraph, press Read clipboard, change speed
-and volume, pause/resume, and select/preview a voice. Changes made through `tts`
+and volume, pause/resume, and select/preview a voice. Changes made through `vroca`
 should appear in the panel. Verify actual audio and clipboard behavior on the
 target Mac; automated GTK tests use a fake daemon.
 
 The Hammerspoon module uses Nix-substituted absolute paths, asynchronous
-`hs.task` calls for `tts`, and `hs.application.launchOrFocus` for the app. It
+`hs.task` calls for `vroca`, and `hs.application.launchOrFocus` for the app. It
 does not depend on Hammerspoon inheriting the terminal's PATH. A reviewable
 example enables the developer-approved Linux/Speechify layout with Option
 replacing Super:
@@ -238,11 +238,29 @@ submission for the daemon's reply, allowing synchronous synthesis and the
 HTTP engine's existing timeout. Long commands no longer lose their reply to
 `socat`'s default half-second wait after stdin closes.
 
-Preferences retain their existing `$XDG_CONFIG_HOME/tts` location (normally
-`~/.config/tts`). Provider keys must remain outside Nix expressions and the
-store. The Linux service still reads the optional user-managed `tts/env` file;
-the Mac module does not source shell environment files. Local engines work
-without provider credentials.
+Preferences live in `$XDG_CONFIG_HOME/vroca` (normally `~/.config/vroca`).
+Provider keys must remain outside Nix expressions and the store. The Linux
+service still reads the optional user-managed `vroca/env` file; the Mac module
+does not source shell environment files. Local engines work without provider
+credentials.
+
+## Migrating From `tts`
+
+The public command was renamed from `tts` to `vroca` on 2026-11-07. What
+changed and what still works:
+
+| Item | Old | New | Compatibility |
+| --- | --- | --- | --- |
+| Commands | `tts`, `tts-daemon`, `tts-panel`, `tts-overlay` | `vroca`, `vroca-daemon`, `vroca-panel`, `vroca-overlay` | `tts*` symlinks ship in the bundle |
+| Flake outputs | `.#tts`, `.#tts-daemon`, … | `.#vroca-cli`, `.#vroca-daemon`, … | `.#vroca` is still the bundle |
+| systemd unit | `tts` | `vroca` | `vroca log` follows the new unit |
+| Runtime files | `tts.sock`, `tts-state.json`, `tts-mode` | `vroca.sock`, `vroca-state.json`, `vroca-mode` | None; old and new daemons do not see each other |
+| Config dir | `~/.config/tts` | `~/.config/vroca` | Daemon reads the old dir when the new one is absent; `mv ~/.config/tts ~/.config/vroca` finishes it |
+| Env vars | `TTS_*` | `VROCA_*` | Any `TTS_*` value is copied to `VROCA_*` when unset |
+
+Deployment in `~/dev/nix-config` still refers to `tts` bindings, the Linux
+`tts-home.nix` unit, and the `TTS_API_KEY` secret. Those work through the
+aliases and fallbacks above; update them, then remove the aliases.
 
 ## Checks
 

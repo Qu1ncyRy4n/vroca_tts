@@ -8,8 +8,17 @@ synthesis per rebuild. Engines change rarely; the daemon changes constantly.
 """
 import os
 
-CONFIG_DIR = os.path.join(
-    os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config"), "tts")
+# ponytail: legacy TTS_* names until nix-config exports VROCA_*; drop after.
+for _k, _v in list(os.environ.items()):
+    if _k.startswith("TTS_") and "VROCA_" + _k[4:] not in os.environ:
+        os.environ["VROCA_" + _k[4:]] = _v
+
+_CONFIG_HOME = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+CONFIG_DIR = os.path.join(_CONFIG_HOME, "vroca")
+_LEGACY_CONFIG_DIR = os.path.join(_CONFIG_HOME, "tts")
+if not os.path.isdir(CONFIG_DIR) and os.path.isdir(_LEGACY_CONFIG_DIR):
+    # ponytail: read ~/.config/tts until migrated; `mv ~/.config/tts ~/.config/vroca` finishes it.
+    CONFIG_DIR = _LEGACY_CONFIG_DIR
 CLONE_DIR = os.path.join(CONFIG_DIR, "voices")
 
 DEFAULT_ENGINE = "kokoro"
@@ -162,8 +171,8 @@ class RemoteEngine:
 
     @staticmethod
     def available():
-        kf = os.environ.get("TTS_API_KEY_FILE", "")
-        return bool(kf and os.path.exists(kf) and os.environ.get("TTS_API_BASE"))
+        kf = os.environ.get("VROCA_API_KEY_FILE", "")
+        return bool(kf and os.path.exists(kf) and os.environ.get("VROCA_API_BASE"))
 
     def _key(self):
         with open(self.key_file) as f:
@@ -213,10 +222,10 @@ def build_engine(name, model_dirs, threads, recognizer=None):
                            threads, recognizer)
     if name == "remote":
         return RemoteEngine(
-            os.environ["TTS_API_BASE"],
-            os.environ.get("TTS_API_MODEL", "tts-1"),
-            os.environ["TTS_API_KEY_FILE"],
+            os.environ["VROCA_API_BASE"],
+            os.environ.get("VROCA_API_MODEL", "tts-1"),
+            os.environ["VROCA_API_KEY_FILE"],
             [v.strip() for v in os.environ.get(
-                "TTS_API_VOICES", "alloy,echo,fable,onyx,nova,shimmer").split(",")],
+                "VROCA_API_VOICES", "alloy,echo,fable,onyx,nova,shimmer").split(",")],
         )
     return LocalEngine(name, model_dirs[name], threads)

@@ -19,8 +19,8 @@ gi.require_version("Gtk", "4.0")
 from gi.repository import GLib, Gtk  # noqa: E402
 
 RUNTIME = os.environ.get("XDG_RUNTIME_DIR") or tempfile.gettempdir()
-SOCK = os.path.join(RUNTIME, "tts.sock")
-MODE_FILE = os.path.join(RUNTIME, "tts-mode")
+SOCK = os.path.join(RUNTIME, "vroca.sock")
+MODE_FILE = os.path.join(RUNTIME, "vroca-mode")
 MODES = ["subtitle", "rsvp", "scroll_rsvp", "off"]
 ALIGNERS = ["asr", "energy"]
 POSITIONS = ["bottom", "top", "center"]
@@ -419,7 +419,7 @@ class Panel(Gtk.Application):
         self._polling = False
         if raw is None:
             if IS_MAC:
-                self.stat.set_text("Daemon unavailable. Start tts-daemon or the Vroca login service.\nSee tts log for service logs.")
+                self.stat.set_text("Daemon unavailable. Start vroca-daemon or the Vroca login service.\nSee vroca log for service logs.")
                 return
             # D6: the old one-shot latch recorded a single start attempt and
             # could stick on "starting" forever. Retry every 3 s instead; once
@@ -429,11 +429,11 @@ class Panel(Gtk.Application):
                 self._start_first = now
             if now - self._start_first > 30.0:
                 self.stat.set_text(
-                    "daemon still not running -- see `tts log` (journalctl)")
+                    "daemon still not running -- see `vroca log` (journalctl)")
             elif now - getattr(self, "_start_at", 0.0) > 3.0:
                 self._start_at = now
                 self.stat.set_text("daemon not running -- starting...")
-                GLib.spawn_async(["systemctl", "--user", "start", "tts"],
+                GLib.spawn_async(["systemctl", "--user", "start", "vroca"],
                                  flags=GLib.SpawnFlags.SEARCH_PATH)
             return True
         self._start_first = None

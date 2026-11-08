@@ -22,11 +22,11 @@ let
   disabledLinux = evaluate "x86_64-linux" false;
   disabledMac = evaluate "aarch64-darwin" false;
 in
-assert linux.systemd.user.services.tts.Service.Restart == "on-failure";
+assert linux.systemd.user.services.vroca.Service.Restart == "on-failure";
 assert
-  linux.systemd.user.services.tts.Service.ExecStart
-  == [ "${linux.services.vroca.package}/bin/tts-daemon" ];
-assert linux.systemd.user.services.tts.Service.EnvironmentFile == "-%E/tts/env";
+  linux.systemd.user.services.vroca.Service.ExecStart
+  == [ "${linux.services.vroca.package}/bin/vroca-daemon" ];
+assert linux.systemd.user.services.vroca.Service.EnvironmentFile == "-%E/vroca/env";
 assert linux.systemd.user.services.tts.Install.WantedBy == [ "graphical-session.target" ];
 assert !(linux.launchd.agents ? vroca);
 assert builtins.elem linux.services.vroca.package linux.home.packages;
@@ -34,16 +34,16 @@ assert mac.launchd.agents.vroca.enable;
 assert mac.launchd.agents.vroca.config.Label == "org.nix-community.home.vroca";
 assert
   mac.launchd.agents.vroca.config.ProgramArguments
-  == [ "${mac.services.vroca.package}/bin/tts-daemon" ];
+  == [ "${mac.services.vroca.package}/bin/vroca-daemon" ];
 assert mac.launchd.agents.vroca.config.RunAtLoad;
 assert !mac.launchd.agents.vroca.config.KeepAlive.SuccessfulExit;
 assert
   mac.launchd.agents.vroca.config.StandardErrorPath == "/tmp/vroca-home/Library/Logs/vroca.log";
 assert !(mac.launchd.agents.vroca.config.EnvironmentVariables ? XDG_RUNTIME_DIR);
-assert !(mac.systemd.user.services ? tts);
+assert !(mac.systemd.user.services ? vroca);
 assert builtins.elem "setupLaunchAgents" mac.home.activation.vrocaLogDirectory.before;
 assert builtins.elem mac.services.vroca.package mac.home.packages;
-assert !(disabledLinux.systemd.user.services ? tts);
+assert !(disabledLinux.systemd.user.services ? vroca);
 assert !(disabledMac.launchd.agents ? vroca);
 assert !(disabledMac.home.activation ? vrocaLogDirectory);
 assert !(builtins.elem disabledLinux.services.vroca.package disabledLinux.home.packages);

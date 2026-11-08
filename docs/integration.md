@@ -13,7 +13,7 @@ differ, it is marked **Changing**. Nothing here is removed without notice.
 The daemon listens on a Unix stream socket:
 
 ```
-$XDG_RUNTIME_DIR/tts.sock
+$XDG_RUNTIME_DIR/vroca.sock
 ```
 
 One request per connection. Write one plaintext command, read the reply, close.
@@ -21,16 +21,16 @@ The connection boundary *is* the message framing — there is no length prefix a
 no terminator.
 
 ```sh
-printf 'say hello there' | socat - "UNIX-CONNECT:$XDG_RUNTIME_DIR/tts.sock"
+printf 'say hello there' | socat - "UNIX-CONNECT:$XDG_RUNTIME_DIR/vroca.sock"
 ```
 
 ```python
 import os, socket
 
-def tts(cmd: str, timeout: float = 5.0) -> str:
+def vroca(cmd: str, timeout: float = 5.0) -> str:
     s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     s.settimeout(timeout)
-    s.connect(os.path.join(os.environ["XDG_RUNTIME_DIR"], "tts.sock"))
+    s.connect(os.path.join(os.environ["XDG_RUNTIME_DIR"], "vroca.sock"))
     s.sendall(cmd.encode())
     out = b""
     while True:                     # read to EOF; replies can be large
@@ -54,10 +54,10 @@ permissive mode bits as an invitation to share it across accounts.
 The daemon is not running. Start it with:
 
 ```sh
-systemctl --user start tts
+systemctl --user start vroca
 ```
 
-Do not auto-start it in a loop. If it is failing, `journalctl --user -u tts` has
+Do not auto-start it in a loop. If it is failing, `journalctl --user -u vroca` has
 the reason.
 
 ---
@@ -90,9 +90,9 @@ markers and code fences are stripped so they are not read aloud literally.
 | `preview <name\|index>` | Audition a voice with a sample sentence. |
 
 ```sh
-tts voice af_kore      # by id
-tts voice Kore         # by display name
-tts voice 5            # by index — same voice
+vroca voice af_kore      # by id
+vroca voice Kore         # by display name
+vroca voice 5            # by index — same voice
 ```
 
 Names are matched case-insensitively against the `id` and `name` fields of
@@ -111,16 +111,16 @@ Each queued item can carry its own voice. This is how you give different
 speakers different voices:
 
 ```sh
-tts queue --voice sid3 The architect has finished reviewing.
-tts queue --voice sid4 Acknowledged. Starting implementation.
-tts say   --voice sid3 Stop. That breaks the protocol.
+vroca queue --voice sid3 The architect has finished reviewing.
+vroca queue --voice sid4 Acknowledged. Starting implementation.
+vroca say   --voice sid3 Stop. That breaks the protocol.
 ```
 
 **Do not select a voice and then queue.** It looks equivalent and is not:
 
 ```sh
-tts voice sid3 && tts queue "..."     # WRONG
-tts voice sid4 && tts queue "..."     # both items speak in sid4
+vroca voice sid3 && vroca queue "..."     # WRONG
+vroca voice sid4 && vroca queue "..."     # both items speak in sid4
 ```
 
 Queued items are rendered when they reach the front, not when they are
@@ -155,15 +155,15 @@ kokoro voice, so asking for it while libritts is loaded returns
 `unknown voice: af_kore` even though the name is perfectly valid. Switch first:
 
 ```sh
-tts engine kokoro
-tts voice af_kore
+vroca engine kokoro
+vroca voice af_kore
 ```
 
 Or use the **engine-qualified form**, which switches for you:
 
 ```sh
-tts voice kokoro:af_kore     # -> "voice 5 (engine kokoro)"
-tts voice libritts:sid3      # -> "voice 3 (engine libritts)"
+vroca voice kokoro:af_kore     # -> "voice 5 (engine kokoro)"
+vroca voice libritts:sid3      # -> "voice 3 (engine libritts)"
 ```
 
 The reply names the engine when a switch happened, because switching reloads a
@@ -222,7 +222,7 @@ In `rsvp` and `scroll_rsvp`, `position bottom` currently renders the same as
 | `last_render_ms`, `avg_render_ms` | Synthesis timing |
 
 The same object is written continuously to
-`$XDG_RUNTIME_DIR/tts-state.json`, which is cheaper to poll than opening a
+`$XDG_RUNTIME_DIR/vroca-state.json`, which is cheaper to poll than opening a
 socket. It is replaced atomically, so you will never read a partial file.
 
 **Caveat:** that file is not currently marked with the writing daemon's
@@ -299,7 +299,7 @@ specified in `rust-spec.md` §10.4.
 Drop a 5–20 second `.wav` clip into:
 
 ```
-~/.config/tts/voices/
+~/.config/vroca/voices/
 ```
 
 The `zipvoice` engine then offers it as a clonable voice, named after the file.
@@ -318,19 +318,19 @@ clip is the portable artifact. See `rust-spec.md` §10.6a.
 ## 7. Quick Reference
 
 ```sh
-tts say "text"          # speak now
-tts queue "text"        # append
-tts stop                # stop speech
-tts status              # JSON state
-tts voice af_kore       # by name
-tts engine libritts     # fastest engine
-tts speed 1.5
-tts log                 # follow the journal
-tts                     # no args == read selection
+vroca say "text"          # speak now
+vroca queue "text"        # append
+vroca stop                # stop speech
+vroca status              # JSON state
+vroca voice af_kore       # by name
+vroca engine libritts     # fastest engine
+vroca speed 1.5
+vroca log                 # follow the journal
+vroca                     # no args == read selection
 ```
 
-The packaged `tts` client now forwards arguments for every socket command;
-`tts speed 1.2` and voice selection work directly (D5). `tts log` follows the
+The packaged `vroca` client now forwards arguments for every socket command;
+`vroca speed 1.2` and voice selection work directly (D5). `vroca log` follows the
 journal on Linux and `~/Library/Logs/vroca.log` on Mac. See
 [`installation.md`](installation.md) for installation and daemon startup.
 
@@ -348,14 +348,14 @@ servers expose exactly that for Qwen3-TTS.
 
 ### Configure it
 
-Put this in `~/.config/tts/env`, which the systemd unit reads and which is
+Put this in `~/.config/vroca/env`, which the systemd unit reads and which is
 deliberately outside the repository and the Nix store:
 
 ```sh
-TTS_API_BASE=https://api.deepinfra.com/v1/openai
-TTS_API_KEY_FILE=/home/you/.config/tts/key
-TTS_API_MODEL=Qwen/Qwen3-TTS-VoiceDesign
-TTS_API_VOICES=Vivian,Ryan,Serena
+VROCA_API_BASE=https://api.deepinfra.com/v1/openai
+VROCA_API_KEY_FILE=/home/you/.config/vroca/key
+VROCA_API_MODEL=Qwen/Qwen3-TTS-VoiceDesign
+VROCA_API_VOICES=Vivian,Ryan,Serena
 ```
 
 Keep the key in its own file, read at call time. Never put it in a Nix
@@ -365,7 +365,7 @@ Then `engine remote` and the usual `voice`, `say`, and `queue` commands work
 unchanged. `remote` only appears in the `engines` list when both the base URL
 and the key file are present.
 
-For a local server instead, point `TTS_API_BASE` at it. vLLM and several
+For a local server instead, point `VROCA_API_BASE` at it. vLLM and several
 community FastAPI wrappers serve the same endpoint shape.
 
 ### What works today, and what does not
@@ -391,7 +391,7 @@ speech than to bulk reading.
 **Text leaves the machine.** Every other engine is local and nothing is
 transmitted. Choosing `remote` sends whatever you speak to the configured
 endpoint. If that endpoint is `localhost`, nothing leaves — but the engine name
-does not distinguish the two, so verify `TTS_API_BASE` rather than trusting the
+does not distinguish the two, so verify `VROCA_API_BASE` rather than trusting the
 label. This is tracked as a design problem in `rust-spec.md` §10.6b.
 
 ---

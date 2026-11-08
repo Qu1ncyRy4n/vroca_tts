@@ -17,7 +17,7 @@
       }
       ''
         export PYTHONDONTWRITEBYTECODE=1
-        python3 ${../tests/test_packaged_client.py} ${vroca.tts}/bin/tts
+        python3 ${../tests/test_packaged_client.py} ${vroca.vroca-cli}/bin/vroca
         touch "$out"
       '';
 }

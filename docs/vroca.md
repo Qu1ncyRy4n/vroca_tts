@@ -9,18 +9,18 @@
 ```
 ┌───────────────────────────────────────────────────────────┐
 │                    LLM Agents / CLI / Scripts             │
-│                 (tts say "..." | socket)                  │
+│                 (vroca say "..." | socket)                  │
 └──────────────────────────────┬────────────────────────────┘
                                │ IPC (UNIX Socket)
 ┌──────────────────────────────▼────────────────────────────┐
-│                    Vroca Daemon (tts-daemon)              │
+│                    Vroca Daemon (vroca-daemon)              │
 │  - Multi-Engine Synthesis (Kokoro / Supertonic / LibriTTS)│
 │  - ASR Zipformer Alignment & Energy Floor Snapping        │
 │  - Playback Queue Management & Pre-fetching               │
 └──────────────┬──────────────────────────────┬─────────────┘
                │ JSON State                   │ mpv PCM
 ┌──────────────▼─────────────┐ ┌──────────────▼─────────────┐
-│  GTK4 Overlay (tts-overlay)│ │ Audio Hardware / PipeWire  │
+│  GTK4 Overlay (vroca-overlay)│ │ Audio Hardware / PipeWire  │
 │  - Subtitle / RSVP / Scroll│ └────────────────────────────┘
 │  - Center Fixation Column  │
 └────────────────────────────┘
@@ -63,7 +63,7 @@ keep the contract true rather than amending it.
 
 ## 2. UNIX Socket IPC API Reference
 
-The Vroca daemon listens on `$XDG_RUNTIME_DIR/tts.sock`. Any agent or shell script can send plaintext commands.
+The Vroca daemon listens on `$XDG_RUNTIME_DIR/vroca.sock`. Any agent or shell script can send plaintext commands.
 
 The socket itself is created mode `0o666`, but it lives inside the per-user
 runtime directory, which is mode `0700`. The effective trust boundary is
@@ -89,7 +89,7 @@ bits on the socket grant nothing and are retained only for compatibility.
 | `words_visible <int>` | `1` – `15` | Sets surrounding context words in `scroll_rsvp` mode. |
 | `position <pos>` | `bottom`, `top`, `center` | Sets overlay screen anchor. In `rsvp` and `scroll_rsvp`, `bottom` currently renders identically to `center`. |
 | `mode` | None | Cycles overlay mode (`subtitle` -> `rsvp` -> `scroll_rsvp` -> `off`). |
-| `mode_set <name>` | `subtitle`, `rsvp`, `scroll_rsvp`, `off` | Sets overlay mode directly. Added when the panel stopped writing `tts-mode` itself (N14); the daemon is the file's only writer. |
+| `mode_set <name>` | `subtitle`, `rsvp`, `scroll_rsvp`, `off` | Sets overlay mode directly. Added when the panel stopped writing `vroca-mode` itself (N14); the daemon is the file's only writer. |
 | `reset` / `reset_prefs` | None | Resets all settings to factory defaults, including engine, and clears rendered audio. |
 | `status` | None | Returns complete daemon state in JSON format. |
 | `catalogue` | None | Returns voice catalogue JSON for current engine. |
@@ -97,18 +97,18 @@ bits on the socket grant nothing and are retained only for compatibility.
 | `unload` / `reload` | None | Drops ONNX model from memory or forces model reload. |
 | `quit` | None | Closes mpv IPC and terminates daemon. |
 
-### `tts` Client Behavior
+### `vroca` Client Behavior
 
-Two behaviors of the deployed `tts` shell client are not socket commands:
+Two behaviors of the deployed `vroca` shell client are not socket commands:
 
 | Invocation | Behavior |
 |:---|:---|
-| `tts` with no arguments | Sends `read`. |
-| `tts log` | Runs `journalctl --user -u tts -u tts-overlay -f`. Never contacts the socket. |
+| `vroca` with no arguments | Sends `read`. |
+| `vroca log` | Runs `journalctl --user -u vroca -u vroca-overlay -f`. Never contacts the socket. |
 
 The packaged client forwards arguments for every socket command, including
-`tts speed 1.2`, `tts voice kokoro:af_kore`, and `tts mode_set scroll_rsvp`.
-On macOS, `tts log` follows `~/Library/Logs/vroca.log` instead of the journal.
+`vroca speed 1.2`, `vroca voice kokoro:af_kore`, and `vroca mode_set scroll_rsvp`.
+On macOS, `vroca log` follows `~/Library/Logs/vroca.log` instead of the journal.
 See [`installation.md`](installation.md) for runtime and service behavior.
 
 ---
@@ -119,8 +119,8 @@ See [`installation.md`](installation.md) for runtime and service behavior.
 - **Kokoro v1.0:** Default engine. 54 real-named voices in the repinned archive (see `installation.md`). RTF ~0.99 from the original 53-voice model measurements.
 - **Supertonic:** Ultra-low latency (RTF ~0.30), 10 voices.
 - **LibriTTS-R:** High-variety catalogue (904 voices, RTF ~0.03), catalogued by median F0 (pitch).
-- **ZipVoice:** Zero-shot voice cloning from reference 5-20s `.wav` clips in `~/.config/tts/voices`.
-- **Remote Endpoint:** OpenAI-compatible `/v1/audio/speech` (e.g. DeepInfra) via `~/.config/tts/env`.
+- **ZipVoice:** Zero-shot voice cloning from reference 5-20s `.wav` clips in `~/.config/vroca/voices`.
+- **Remote Endpoint:** OpenAI-compatible `/v1/audio/speech` (e.g. DeepInfra) via `~/.config/vroca/env`.
 
 ### B. Display Overlay Modes
 - **Subtitle Strip:** Bottom-anchored GTK4 layer-shell strip with word-by-word highlight.
@@ -129,7 +129,7 @@ See [`installation.md`](installation.md) for runtime and service behavior.
 
 ### C. Text Normalization & Local Agent Input
 - **Markdown Text Normalizer:** Strips headings (`#`), bold/italic formatting, links, bullet points, and code blocks before sentence splitting so speech sounds like natural prose.
-- **Local Agent Input:** Local agents and scripts submit speech through the `tts` CLI or UNIX socket. A watched spool file is not implemented.
+- **Local Agent Input:** Local agents and scripts submit speech through the `vroca` CLI or UNIX socket. A watched spool file is not implemented.
 
 ---
 

@@ -11,10 +11,10 @@ decision lives here.
 ## The proposal
 
 A file or named pipe, `/tmp/tts-speak`, watched by an `inotify` thread in
-`tts-daemon`. Any agent or script could run `echo "Task complete" >
+`vroca-daemon`. Any agent or script could run `echo "Task complete" >
 /tmp/tts-speak` to make the daemon speak. The daemon would create it with mode
 `0o666` "so background agents running under different user contexts can
-notify speech", and symlink it to `~/.config/tts/speak`.
+notify speech", and symlink it to `~/.config/vroca/speak`.
 
 ## Why not as written
 
@@ -31,12 +31,12 @@ notify speech", and symlink it to `~/.config/tts/speak`.
   today, including LLM agents, shell scripts, and the panel, runs as the same
   user as the daemon. Giving other users access widens the trust boundary for
   no current caller.
-- **It duplicates an interface that already works.** The `tts` CLI and the
-  legacy socket at `$XDG_RUNTIME_DIR/tts.sock` already accept `say` and
+- **It duplicates an interface that already works.** The `vroca` CLI and the
+  legacy socket at `$XDG_RUNTIME_DIR/vroca.sock` already accept `say` and
   `queue` from any local script. The runtime directory is mode `0700`, so the
   owning user is the trust boundary (`vroca.md`; mismatch D11 records that the
   socket's `0o666` mode bits are misleading but grant nothing). An agent that
-  can run `echo` can run `tts queue "Task complete"`.
+  can run `echo` can run `vroca queue "Task complete"`.
 
 ## Requirements for any future spool
 
