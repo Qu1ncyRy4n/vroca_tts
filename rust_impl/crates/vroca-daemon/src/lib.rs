@@ -47,14 +47,14 @@ impl Daemon {
             .start_fake()
             .map_err(|e| format!("Player error: {}", e.message))?;
 
-        let legacy_sock = self.config.runtime_dir.join("tts.sock");
+        let legacy_sock = self.config.runtime_dir.join("vroca.sock");
         let struct_sock = self.config.runtime_dir.join("vroca-v1.sock");
-        let mpv_sock = self.config.runtime_dir.join("tts-mpv.sock");
+        let mpv_sock = self.config.runtime_dir.join("vroca-mpv.sock");
 
         let temp_dir = self
             .config
             .runtime_dir
-            .join(format!("tts-{}", std::process::id()));
+            .join(format!("vroca-{}", std::process::id()));
         fs::create_dir_all(&temp_dir).map_err(|e| format!("Failed to create temp dir: {}", e))?;
 
         Self::bind_socket(&legacy_sock)?;
@@ -181,14 +181,14 @@ impl Daemon {
             let _ = th.join();
         }
 
-        let _ = fs::remove_file(self.config.runtime_dir.join("tts.sock"));
+        let _ = fs::remove_file(self.config.runtime_dir.join("vroca.sock"));
         let _ = fs::remove_file(self.config.runtime_dir.join("vroca-v1.sock"));
 
-        // Find and remove temp dirs starting with tts-
+        // Find and remove temp dirs starting with vroca-
         if let Ok(entries) = fs::read_dir(&self.config.runtime_dir) {
             for entry in entries.flatten() {
                 let name = entry.file_name().to_string_lossy().to_string();
-                if name.starts_with("tts-") {
+                if name.starts_with("vroca-") {
                     if entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
                         let _ = fs::remove_dir_all(entry.path());
                     } else if name.ends_with("-mpv.sock") {
@@ -251,17 +251,17 @@ mod tests {
         // Create a dummy mpv socket to simulate running mpv
         let mpv_sock = temp_dir
             .path()
-            .join(format!("tts-{}-mpv.sock", std::process::id()));
+            .join(format!("vroca-{}-mpv.sock", std::process::id()));
         fs::File::create(&mpv_sock).unwrap();
 
         d1.stop();
 
-        assert!(!temp_dir.path().join("tts.sock").exists());
+        assert!(!temp_dir.path().join("vroca.sock").exists());
         assert!(!temp_dir.path().join("vroca-v1.sock").exists());
 
         let has_temp_dirs = fs::read_dir(temp_dir.path()).unwrap().any(|e| {
             let name = e.unwrap().file_name().to_string_lossy().to_string();
-            name.starts_with("tts-")
+            name.starts_with("vroca-")
         });
         assert!(!has_temp_dirs); // Must be cleaned up
     }

@@ -7,7 +7,7 @@ use vroca_core::operations::{Operation, ProtocolError, Replace, ResetGroup, Scop
 use vroca_core::schema::{EngineId, Position};
 
 #[derive(Parser)]
-#[command(name = "tts", about = "Vroca TTS command line interface")]
+#[command(name = "vroca", about = "Vroca TTS command line interface")]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
@@ -148,7 +148,7 @@ fn main() -> std::process::ExitCode {
 
     if matches!(cmd, Commands::Log) {
         let status = Command::new("journalctl")
-            .args(["--user", "-u", "tts", "-u", "tts-overlay", "-f"])
+            .args(["--user", "-u", "vroca", "-u", "vroca-overlay", "-f"])
             .status();
 
         match status {
@@ -202,7 +202,7 @@ mod tests {
 
     #[test]
     fn test_cli_parsing_say_forwards_arguments() {
-        let cli = Cli::try_parse_from(["tts", "say", "hello", "world"]).unwrap();
+        let cli = Cli::try_parse_from(["vroca", "say", "hello", "world"]).unwrap();
         let cmd = cli.command.unwrap();
         let op = map_command(cmd).unwrap().unwrap();
         assert_eq!(
@@ -216,7 +216,7 @@ mod tests {
 
     #[test]
     fn test_cli_bare_means_read() {
-        let cli = Cli::try_parse_from(["tts"]).unwrap();
+        let cli = Cli::try_parse_from(["vroca"]).unwrap();
         let cmd = cli.command.unwrap_or(Commands::Read);
         let op = map_command(cmd).unwrap().unwrap();
         assert_eq!(op, Operation::Read);
@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_cli_speed_arg() {
-        let cli = Cli::try_parse_from(["tts", "speed", "1.2"]).unwrap();
+        let cli = Cli::try_parse_from(["vroca", "speed", "1.2"]).unwrap();
         let cmd = cli.command.unwrap();
         let op = map_command(cmd).unwrap().unwrap();
         assert_eq!(op, Operation::SetSpeed { speed: 1.2 });
@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn test_cli_log_shortcut() {
-        let cli = Cli::try_parse_from(["tts", "log"]).unwrap();
+        let cli = Cli::try_parse_from(["vroca", "log"]).unwrap();
         let cmd = cli.command.unwrap();
         let op = map_command(cmd).unwrap();
         assert!(op.is_none()); // meaning we skip daemon sending
@@ -240,7 +240,7 @@ mod tests {
 
     #[test]
     fn test_cli_say_no_args_error() {
-        let cli = Cli::try_parse_from(["tts", "say"]).unwrap();
+        let cli = Cli::try_parse_from(["vroca", "say"]).unwrap();
         let cmd = cli.command.unwrap();
         let err = map_command(cmd).unwrap_err();
         assert_eq!(err.code, vroca_core::operations::ErrorCode::InvalidRequest);

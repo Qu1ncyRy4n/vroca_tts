@@ -1,7 +1,0 @@
-[package]
-name = "tts-daemon"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-vroca-daemon = { path = "../../crates/vroca-daemon" }

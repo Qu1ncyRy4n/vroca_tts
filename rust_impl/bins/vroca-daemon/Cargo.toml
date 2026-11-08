@@ -1,0 +1,12 @@
+[package]
+# Package name differs from the crate `vroca-daemon` library; the binary keeps the public name.
+name = "vroca-daemon-bin"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "vroca-daemon"
+path = "src/main.rs"
+
+[dependencies]
+vroca-daemon = { path = "../../crates/vroca-daemon" }
