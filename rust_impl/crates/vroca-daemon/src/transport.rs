@@ -33,6 +33,7 @@ use vroca_core::schema::Preferences;
 
 use crate::owner::{new_daemon_id, OwnerClient, OwnerConfig, OwnerHandle};
 use crate::player::Player;
+use crate::prefs_store::PrefsStore;
 
 /// §7.8, decided 2026-11-08.
 pub const MAX_REQUEST: usize = 64 * 1024;
@@ -48,6 +49,8 @@ const LEGACY_SOCKET: &str = "vroca.sock";
 const STRUCTURED_SOCKET: &str = "vroca-v1.sock";
 const LOCK_FILE: &str = "vroca.lock";
 const SNAPSHOT_FILE: &str = "vroca-state.json";
+/// Read once, to migrate overlay mode into prefs (DEC-7).
+const LEGACY_MODE_FILE: &str = "vroca-mode";
 /// Legacy keeps `0666` for compatibility (D11); the structured socket is
 /// owner-only (§7.3).
 const LEGACY_MODE: u32 = 0o666;
@@ -55,6 +58,9 @@ const STRUCTURED_MODE: u32 = 0o600;
 
 pub struct DaemonConfig {
     pub runtime_dir: PathBuf,
+    /// The directory holding `prefs.json` (daemon.py `CONFIG_DIR`). `None`
+    /// keeps preferences in memory only.
+    pub prefs_dir: Option<PathBuf>,
 }
 
 #[derive(Debug)]
@@ -143,11 +149,21 @@ impl Daemon {
             }
         };
 
+        // Opened under the lock, so two daemons never migrate one file.
+        let (prefs, prefs_store, problems) = match &config.prefs_dir {
+            Some(prefs_dir) => {
+                let opened = PrefsStore::open(prefs_dir, Some(&dir.join(LEGACY_MODE_FILE)));
+                (opened.prefs, Some(opened.store), opened.problems)
+            }
+            None => (Preferences::default(), None, Vec::new()),
+        };
         let owner = OwnerHandle::spawn(
             OwnerConfig {
                 daemon_id: new_daemon_id(),
                 snapshot_path: dir.join(SNAPSHOT_FILE),
-                prefs: Preferences::default(),
+                prefs,
+                prefs_store,
+                problems,
             },
             player,
         );
@@ -438,14 +454,53 @@ mod tests {
     use std::net::Shutdown;
 
     fn start(dir: &Path) -> Result<(Daemon, FakePlayerHandle), StartError> {
+        start_with_prefs(dir, None)
+    }
+
+    fn start_with_prefs(
+        dir: &Path,
+        prefs_dir: Option<&Path>,
+    ) -> Result<(Daemon, FakePlayerHandle), StartError> {
         let (player, handle) = FakePlayer::new();
         let daemon = Daemon::start(
             DaemonConfig {
                 runtime_dir: dir.to_path_buf(),
+                prefs_dir: prefs_dir.map(Path::to_path_buf),
             },
             Box::new(player),
         )?;
         Ok((daemon, handle))
+    }
+
+    #[test]
+    fn dec7_dec17_settings_survive_restart_through_prefs() {
+        let runtime = tempfile::tempdir().unwrap();
+        let config = tempfile::tempdir().unwrap();
+        // A live Python setup: unversioned prefs plus the old mode file.
+        fs::write(
+            config.path().join("prefs.json"),
+            br#"{"engine": "libritts", "voice": 9, "speed": 1.0}"#,
+        )
+        .unwrap();
+        fs::write(runtime.path().join(LEGACY_MODE_FILE), "scroll_rsvp").unwrap();
+
+        let (daemon, _p) = start_with_prefs(runtime.path(), Some(config.path())).unwrap();
+        let status = legacy(runtime.path(), b"status");
+        assert!(status.contains("\"engine\": \"libritts\""), "{status}");
+        assert!(status.contains("\"voice\": 9"), "{status}");
+        assert_eq!(legacy(runtime.path(), b"speed 2"), "speed 2.00");
+        assert_eq!(legacy(runtime.path(), b"mode"), "off");
+        daemon.stop();
+
+        let (daemon, _p) = start_with_prefs(runtime.path(), Some(config.path())).unwrap();
+        let status = legacy(runtime.path(), b"status");
+        assert!(status.contains("\"speed\": 2.0"), "{status}");
+        assert!(status.contains("\"state\": \"ok\""), "{status}");
+        daemon.stop();
+        let saved: serde_json::Value =
+            serde_json::from_slice(&fs::read(config.path().join("prefs.json")).unwrap()).unwrap();
+        assert_eq!(saved.get("overlay_mode"), Some(&serde_json::json!("off")));
+        assert_eq!(saved.get("voice"), Some(&serde_json::json!(9)));
     }
 
     fn legacy(dir: &Path, request: &[u8]) -> String {

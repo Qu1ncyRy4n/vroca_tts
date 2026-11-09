@@ -6,6 +6,7 @@
 
 pub mod owner;
 pub mod player;
+pub mod prefs_store;
 
 #[cfg(feature = "transport")]
 pub mod transport;

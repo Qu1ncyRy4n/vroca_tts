@@ -19,6 +19,7 @@ use vroca_core::schema::{Health, Preferences, RuntimeSnapshot, SpeakerIndex};
 use vroca_core::state::{Reply, State};
 
 use crate::player::{Player, PlayerEvent};
+use crate::prefs_store::PrefsStore;
 
 pub const SNAPSHOT_SCHEMA: u32 = 1;
 
@@ -26,6 +27,11 @@ pub struct OwnerConfig {
     pub daemon_id: String,
     pub snapshot_path: PathBuf,
     pub prefs: Preferences,
+    /// Where preference changes are saved; `None` keeps them in memory.
+    pub prefs_store: Option<PrefsStore>,
+    /// Problems found before the owner started (corrupt or corrected
+    /// prefs), published as degraded health from the first snapshot.
+    pub problems: Vec<String>,
 }
 
 enum Message {
@@ -100,6 +106,10 @@ impl OwnerClient {
 fn run(config: OwnerConfig, mut player: Box<dyn Player>, rx: &Receiver<Message>) {
     let mut state = State::new(config.prefs.clone());
     let mut health = Health::Ok;
+    for problem in &config.problems {
+        health.degrade(problem.clone());
+    }
+    let mut saved = config.prefs.clone();
     let mut published: Option<RuntimeSnapshot> = None;
     publish(&config, &state, &mut health, &mut published);
 
@@ -119,6 +129,14 @@ fn run(config: OwnerConfig, mut player: Box<dyn Player>, rx: &Receiver<Message>)
                 health.degrade(format!("player: {reason}"));
             }
             Message::Shutdown => break,
+        }
+        if state.prefs != saved {
+            if let Some(store) = &config.prefs_store {
+                if let Err(e) = store.save(&state.prefs) {
+                    health.degrade(format!("prefs: {e}"));
+                }
+            }
+            saved = state.prefs.clone();
         }
         publish(&config, &state, &mut health, &mut published);
     }
@@ -245,7 +263,12 @@ pub fn write_atomic(path: &Path, snapshot: &RuntimeSnapshot) -> Result<(), Strin
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+#[allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::indexing_slicing
+)]
 mod tests {
     use super::*;
     use crate::player::{FakePlayer, FakePlayerHandle, PlayerCall};
@@ -259,6 +282,8 @@ mod tests {
                 daemon_id: "test:1".into(),
                 snapshot_path: path.clone(),
                 prefs: Preferences::default(),
+                prefs_store: None,
+                problems: Vec::new(),
             },
             Box::new(player),
         );
@@ -373,6 +398,8 @@ mod tests {
                 daemon_id: "test:1".into(),
                 snapshot_path: path,
                 prefs: Preferences::default(),
+                prefs_store: None,
+                problems: Vec::new(),
             },
             Box::new(player),
         );
@@ -418,6 +445,44 @@ mod tests {
         assert!(!state.previewing());
         assert_eq!(state.active_item().map(|i| i.index), Some(1));
         assert!(!state.paused);
+    }
+
+    #[test]
+    fn dec17_prefs_saved_on_change_and_startup_problems_published() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("prefs.json"), b"{ corrupt").unwrap();
+        let opened = PrefsStore::open(dir.path(), None);
+        let (player, _handle) = FakePlayer::new();
+        let owner = OwnerHandle::spawn(
+            OwnerConfig {
+                daemon_id: "test:1".into(),
+                snapshot_path: dir.path().join("vroca-state.json"),
+                prefs: opened.prefs,
+                prefs_store: Some(opened.store),
+                problems: opened.problems,
+            },
+            Box::new(player),
+        );
+        let client = owner.client();
+        // DEC-17 rule 4: the quarantine is visible in health.
+        match status(&client).health {
+            Health::Degraded { problems } => {
+                assert!(problems[0].contains("was corrupt"), "{problems:?}")
+            }
+            Health::Ok => panic!("corrupt prefs not reported"),
+        }
+        assert!(
+            !dir.path().join("prefs.json").exists(),
+            "status saves nothing"
+        );
+        client
+            .request(parse_legacy("mode_set rsvp").unwrap())
+            .unwrap();
+        status(&client);
+        let saved: serde_json::Value =
+            serde_json::from_slice(&fs::read(dir.path().join("prefs.json")).unwrap()).unwrap();
+        assert_eq!(saved.get("overlay_mode"), Some(&serde_json::json!("rsvp")));
+        owner.shutdown();
     }
 
     #[test]

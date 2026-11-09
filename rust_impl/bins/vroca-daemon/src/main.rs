@@ -2,6 +2,23 @@
 
 use std::process::ExitCode;
 
+/// daemon.py `CONFIG_DIR`: `$XDG_CONFIG_HOME/vroca`, else `~/.config/vroca`,
+/// reading the pre-rename `tts` directory until it has been moved.
+#[cfg(feature = "transport")]
+fn prefs_dir() -> Option<std::path::PathBuf> {
+    use std::path::PathBuf;
+    let config_home = std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".config")))?;
+    let current = config_home.join("vroca");
+    let legacy = config_home.join("tts");
+    if !current.is_dir() && legacy.is_dir() {
+        Some(legacy)
+    } else {
+        Some(current)
+    }
+}
+
 #[cfg(feature = "transport")]
 fn main() -> ExitCode {
     use vroca_daemon::player::FakePlayer;
@@ -11,12 +28,19 @@ fn main() -> ExitCode {
         eprintln!("vroca-daemon: XDG_RUNTIME_DIR is not set");
         return ExitCode::FAILURE;
     };
+    let prefs_dir = prefs_dir();
+    if prefs_dir.is_none() {
+        eprintln!(
+            "vroca-daemon: neither XDG_CONFIG_HOME nor HOME is set; preferences will not be saved"
+        );
+    }
     // No engine or real player exists until slice 6.
     eprintln!("vroca-daemon: fake player, no audio");
     let (player, _handle) = FakePlayer::new();
     match Daemon::start(
         DaemonConfig {
             runtime_dir: runtime_dir.into(),
+            prefs_dir,
         },
         Box::new(player),
     ) {
