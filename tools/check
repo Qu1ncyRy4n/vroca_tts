@@ -6,11 +6,11 @@ cd "$(git rev-parse --show-toplevel)"
 command -v cargo >/dev/null 2>&1 || { echo "cargo missing: run through 'nix develop -c tools/check'" >&2; exit 1; }
 
 (cd rust_impl && cargo fmt --check)
-# DEC-18: both the default build (no transport) and the gated one, so
-# neither configuration rots while the `transport` feature exists.
+# DEC-18/DEC-19: the default build (with transport) and the transport-free
+# one, so neither configuration rots while the feature exists.
 (cd rust_impl && cargo clippy --workspace --all-targets -- -D warnings)
-(cd rust_impl && cargo clippy --workspace --all-targets --all-features -- -D warnings)
+(cd rust_impl && cargo clippy --workspace --all-targets --no-default-features -- -D warnings)
 (cd rust_impl && cargo test --workspace)
-(cd rust_impl && cargo test --workspace --all-features)
+(cd rust_impl && cargo test --workspace --no-default-features)
 python3 -m py_compile python_impl/*.py scripts/*.py tests/*.py
 git diff --check

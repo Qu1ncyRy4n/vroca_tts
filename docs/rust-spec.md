@@ -351,7 +351,8 @@ left Open in section 7.
 
 ## 6. Decisions
 
-Seventeen binding decisions. Each was raised and answered before being recorded.
+Binding decisions. Each was raised and answered before being recorded.
+Decisions 1–17 were locked together; 18 and 19 were added on 2026-11-08.
 
 ---
 
@@ -663,7 +664,8 @@ socket; typed error on a missing socket; `Send` asserted in a compile test.
 
 ### Decision 6 — Structured Protocol Timing
 
-**Status:** Decided.
+**Status:** Decided. **Amended by Decision 19:** version 1 is in effect and
+bound as of slice C.
 
 **Current behavior.** No structured protocol exists.
 
@@ -1428,6 +1430,54 @@ number — until the slice that was always meant to make it.
 `std::os::unix::net`, `std::process::Command`, or `journalctl`; the existing
 client and daemon tests still passing under `--features transport`; the
 DEC-6 "no socket bound" test.
+
+> **Items 4 and 5 superseded by Decision 19.**
+
+---
+
+### Decision 19 — Slice C Acceptance And Structured Protocol Version 1
+
+**Status:** Decided 2026-11-08 (developer), after reviewing slice C.
+Supersedes Decision 18 items 4 and 5; amends Decision 6.
+
+**Current behavior.** Slice C landed with the socket transport behind the
+`transport` feature, off by default (Decision 18), and the structured codec
+bound to `vroca-v1.sock` under that gate with no version field.
+
+**Alternatives considered.**
+
+- *Accept, keep the gate off until slice D.* Rejected: the daemon transport
+  is accepted on its own merits, and an accepted capability that is off by
+  default is not exercised.
+- *Leave `"v": 1` to slice 2 as Decision 6 said.* Rejected: Decision 6
+  ties the version to the moment the socket is bound, and turning the gate on
+  is that moment. Shipping an unversioned bound socket is the one mistake
+  Decision 6 exists to prevent.
+
+**Decision.**
+
+1. Slice C is accepted. `transport` is a **default** feature of
+   `vroca-daemon`, `vroca-client`, `vroca`, and `vroca-daemon-bin`. The
+   feature and its gate test remain, so the transport stays separable;
+   `tools/check` lints and tests both the default build and
+   `--no-default-features`. Workspace path dependencies use
+   `default-features = false` so the transport-free build really is one.
+2. Decision 6 is amended: the structured protocol is **version 1** now. Every
+   request MUST carry `"v": 1`; a missing or different value MUST produce
+   `invalid_request` before anything else in the request is read. Responses
+   carry no version; the socket path already names it (Decision 3).
+3. Removing the feature flag entirely is a later, separate change once
+   slice D is accepted.
+
+**Justification.** Version 1 is a compatibility promise, and the promise
+should be made exactly when a client can first rely on the socket by default.
+Checking the version first means a future `v: 2` may reshape any field
+without being misparsed as version 1.
+
+**Test evidence required.** Codec tests for a missing version, versions 0
+and 2, and non-integer versions; a socket test rejecting unversioned and
+`v: 2` requests; the gate test; both feature configurations in
+`tools/check`.
 
 ---
 

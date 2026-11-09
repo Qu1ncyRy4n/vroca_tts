@@ -12,6 +12,7 @@ path = "src/main.rs"
 workspace = true
 
 [features]
+default = ["transport"]
 transport = ["vroca-daemon/transport"]
 
 [dependencies]

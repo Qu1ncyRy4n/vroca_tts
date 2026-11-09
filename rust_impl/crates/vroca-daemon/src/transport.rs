@@ -604,9 +604,19 @@ mod tests {
     fn structured_socket_round_trip_and_errors() {
         let dir = tempfile::tempdir().unwrap();
         let (daemon, _p) = start(dir.path()).unwrap();
-        match structured(dir.path(), br#"{"type":"status"}"#) {
+        match structured(dir.path(), br#"{"v":1,"type":"status"}"#) {
             Response::Status { snapshot } => assert_eq!(snapshot.schema, 1),
             other => panic!("{other:?}"),
+        }
+        // DEC-19: an unversioned or other-version request is rejected.
+        for request in [&br#"{"type":"status"}"#[..], br#"{"v":2,"type":"status"}"#] {
+            match structured(dir.path(), request) {
+                Response::Error { error } => assert_eq!(
+                    error.code,
+                    vroca_core::operations::ErrorCode::InvalidRequest
+                ),
+                other => panic!("{other:?}"),
+            }
         }
         // DEC-3: a legacy client on the structured path gets a typed error.
         match structured(dir.path(), b"status") {

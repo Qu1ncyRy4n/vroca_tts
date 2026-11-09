@@ -7,7 +7,8 @@ edition.workspace = true
 workspace = true
 
 [features]
-# DEC-18: the Unix-socket round trip.
+# DEC-18: the Unix-socket round trip. On by default (DEC-19).
+default = ["transport"]
 transport = []
 
 [dependencies]

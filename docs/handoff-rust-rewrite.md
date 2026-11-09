@@ -118,10 +118,10 @@ From `rust-review.md` §4 and §6. All inside `vroca-core`, serde only.
 
 ### Slice C — Daemon transport (DEC-18, §7.3, §7.8 decided)
 
-**Implemented 2026-11-08, awaiting developer acceptance.** The `transport`
-feature stays off by default until then. Code: `vroca-daemon/src/{owner,
+**Done and accepted 2026-11-08 (DEC-19).** `transport` is on by default;
+the structured socket requires `"v": 1`. Code: `vroca-daemon/src/{owner,
 player,transport}.rs`, `tests/dec18_default_features.rs`; `tools/check` runs
-default and `--all-features`. Bug 10 is closed with a `vroca.lock`
+default and `--no-default-features`. Bug 10 is closed with a `vroca.lock`
 `File::try_lock` (kept after exit by design). Deferred: SIGTERM handling
 (DEC-9 rule 2) needs a signal mechanism without `unsafe` and lands with the
 real mpv player in slice E; legacy reply shapes beyond errors (`voice N`,
@@ -140,8 +140,7 @@ real mpv player in slice E; legacy reply shapes beyond errors (`voice N`,
 - `Player` trait with the fake impl; health enum with a degraded state on
   player death (N4); snapshot writer with `daemon_id` on every state change
   (DEC-8).
-- Binding `vroca-v1.sock` with `"v": 1` and its rejection test stays slice 2
-  work under DEC-6 (DEC-18 did not amend it).
+- `"v": 1` on `vroca-v1.sock` with its rejection test (DEC-19 amends DEC-6).
 
 ### Slice D — Client and CLI (needs §7.2)
 

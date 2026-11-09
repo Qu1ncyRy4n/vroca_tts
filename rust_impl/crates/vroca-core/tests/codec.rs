@@ -107,7 +107,32 @@ fn dec16_scroll_rsvp_wire_spelling() {
     .unwrap();
     assert_eq!(
         String::from_utf8(bytes).unwrap(),
-        r#"{"type":"set_mode","mode":"scroll_rsvp"}"#
+        r#"{"v":1,"type":"set_mode","mode":"scroll_rsvp"}"#
+    );
+}
+
+#[test]
+fn dec19_version_is_required_and_must_be_1() {
+    let e = decode_request(br#"{"type":"status"}"#).unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidRequest);
+    assert_eq!(e.message, "request needs \"v\": 1");
+    for bytes in [
+        &br#"{"v":2,"type":"status"}"#[..],
+        br#"{"v":0,"type":"status"}"#,
+        br#"{"v":"1","type":"status"}"#,
+        br#"{"v":1.5,"type":"status"}"#,
+        br#"{"v":null,"type":"status"}"#,
+    ] {
+        let e = decode_request(bytes).unwrap_err();
+        assert_eq!(e.code, ErrorCode::InvalidRequest, "{bytes:?}: {e:?}");
+        assert!(
+            e.message.starts_with("unsupported protocol version"),
+            "{e:?}"
+        );
+    }
+    assert_eq!(
+        decode_request(br#"{"v":1,"type":"status"}"#).unwrap(),
+        Operation::Status
     );
 }
 
@@ -121,27 +146,27 @@ fn malformed_json_is_invalid_request() {
 
 #[test]
 fn unknown_operation_is_invalid_request() {
-    let e = decode_request(br#"{"type":"frobnicate"}"#).unwrap_err();
+    let e = decode_request(br#"{"v":1,"type":"frobnicate"}"#).unwrap_err();
     assert_eq!(e.code, ErrorCode::InvalidRequest);
     assert_eq!(e.message, "unknown operation: frobnicate");
-    let e = decode_request(br#"{"text":"hi"}"#).unwrap_err();
+    let e = decode_request(br#"{"v":1,"text":"hi"}"#).unwrap_err();
     assert_eq!(e.code, ErrorCode::InvalidRequest);
-    let e = decode_request(br#"{"type":7}"#).unwrap_err();
+    let e = decode_request(br#"{"v":1,"type":7}"#).unwrap_err();
     assert_eq!(e.code, ErrorCode::InvalidRequest);
 }
 
 #[test]
 fn missing_required_field_is_invalid_request() {
-    let e = decode_request(br#"{"type":"speak","replace":"all"}"#).unwrap_err();
+    let e = decode_request(br#"{"v":1,"type":"speak","replace":"all"}"#).unwrap_err();
     assert_eq!(e.code, ErrorCode::InvalidRequest, "{e:?}");
     assert!(e.message.starts_with("missing field"), "{e:?}");
 }
 
 #[test]
 fn wrong_field_type_is_invalid_argument() {
-    let e = decode_request(br#"{"type":"set_speed","speed":"fast"}"#).unwrap_err();
+    let e = decode_request(br#"{"v":1,"type":"set_speed","speed":"fast"}"#).unwrap_err();
     assert_eq!(e.code, ErrorCode::InvalidArgument, "{e:?}");
-    let e = decode_request(br#"{"type":"speak","text":5,"replace":"all"}"#).unwrap_err();
+    let e = decode_request(br#"{"v":1,"type":"speak","text":5,"replace":"all"}"#).unwrap_err();
     assert_eq!(e.code, ErrorCode::InvalidArgument, "{e:?}");
 }
 
@@ -149,13 +174,13 @@ fn wrong_field_type_is_invalid_argument() {
 fn dec1_unknown_policy_value_is_invalid_argument() {
     // Review bug 17: this used to map to invalid_request.
     for bytes in [
-        &br#"{"type":"speak","text":"hi","replace":"maybe"}"#[..],
-        br#"{"type":"stop","scope":"everything"}"#,
-        br#"{"type":"skip","unit":"word"}"#,
-        br#"{"type":"reset","group":"audio"}"#,
-        br#"{"type":"set_mode","mode":"sideways"}"#,
-        br#"{"type":"set_aligner","aligner":"dtw"}"#,
-        br#"{"type":"set_engine","id":"espeak"}"#,
+        &br#"{"v":1,"type":"speak","text":"hi","replace":"maybe"}"#[..],
+        br#"{"v":1,"type":"stop","scope":"everything"}"#,
+        br#"{"v":1,"type":"skip","unit":"word"}"#,
+        br#"{"v":1,"type":"reset","group":"audio"}"#,
+        br#"{"v":1,"type":"set_mode","mode":"sideways"}"#,
+        br#"{"v":1,"type":"set_aligner","aligner":"dtw"}"#,
+        br#"{"v":1,"type":"set_engine","id":"espeak"}"#,
     ] {
         let e = decode_request(bytes).unwrap_err();
         assert_eq!(e.code, ErrorCode::InvalidArgument, "{bytes:?}: {e:?}");
@@ -172,6 +197,6 @@ fn speak_without_voice_omits_the_field() {
     .unwrap();
     assert_eq!(
         String::from_utf8(bytes).unwrap(),
-        r#"{"type":"speak","text":"hi","replace":"all"}"#
+        r#"{"v":1,"type":"speak","text":"hi","replace":"all"}"#
     );
 }

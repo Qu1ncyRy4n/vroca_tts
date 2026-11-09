@@ -19,8 +19,10 @@ clap = { version = "4.4", features = ["derive"] }  # CLI parsing (rust-spec.md D
 tempfile = "3.10"                                  # tests only: isolated runtime dirs
 
 vroca-core = { path = "crates/vroca-core" }
-vroca-client = { path = "crates/vroca-client" }
-vroca-daemon = { path = "crates/vroca-daemon" }
+# Members opt into `transport` through their own feature, so a
+# --no-default-features build really has none (DEC-18, DEC-19).
+vroca-client = { path = "crates/vroca-client", default-features = false }
+vroca-daemon = { path = "crates/vroca-daemon", default-features = false }
 
 # ExocortexCent docs/03-standards.md lint set. Test modules opt out of the
 # unwrap/expect/panic rules locally.

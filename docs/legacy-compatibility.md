@@ -51,7 +51,7 @@ Finding identifiers (`D#`, `N#`) refer to the mismatch register in
 | Response write | `conn.send()` with the return value discarded | MUST use a full write. The libritts `catalogue` response measures **101,359 bytes** against roughly 106 KB of effective buffer — under 5% margin, shrinking as voices are added. | N5 |
 | Whitespace | `strip()` before dispatch, so `vroca say ""` becomes `unknown: say` and surrounding whitespace in text is lost | Decide explicitly; preserve interior text exactly. | N7 |
 | Invalid numerics | `float()`/`int()` raise and **terminate the daemon** | MUST become a typed error. Non-negotiable. | D8 |
-| Second socket | none | `vroca-v1.sock` bound in slice 2. Permissions Open (§7.3). | → DEC-3 |
+| Second socket | none | `vroca-v1.sock`, structured protocol version 1 (`"v": 1` required), mode `0600` (§7.3). Bound since slice C. | → DEC-3, DEC-19 |
 | Trust boundary | socket is `0666` inside a `0700` runtime directory | Legacy keeps `0666` for compatibility. The real boundary is the owning user and MUST be documented as such. | D11 |
 
 ---

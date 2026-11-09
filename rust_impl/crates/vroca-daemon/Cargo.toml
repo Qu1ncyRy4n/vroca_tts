@@ -7,8 +7,9 @@ edition.workspace = true
 workspace = true
 
 [features]
-# DEC-18: sockets, lock file, and temp dirs. Off until the developer accepts
-# the slice that needs them.
+# DEC-18: sockets, lock file, and temp dirs, kept separable. On by default
+# since slice C was accepted (DEC-19).
+default = ["transport"]
 transport = []
 
 [dependencies]

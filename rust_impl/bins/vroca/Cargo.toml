@@ -7,7 +7,9 @@ edition.workspace = true
 workspace = true
 
 [features]
-# DEC-18: the socket round trip and the journalctl `log` shortcut.
+# DEC-18: the socket round trip and the journalctl `log` shortcut. On by
+# default (DEC-19).
+default = ["transport"]
 transport = ["vroca-client/transport"]
 
 [dependencies]
