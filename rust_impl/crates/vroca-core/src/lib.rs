@@ -7,6 +7,7 @@ pub mod operations;
 pub mod parser;
 pub mod schema;
 pub mod state;
+pub mod text;
 
 #[cfg(test)]
 pub mod tests;
