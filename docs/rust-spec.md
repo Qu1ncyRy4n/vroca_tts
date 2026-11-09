@@ -352,7 +352,7 @@ left Open in section 7.
 ## 6. Decisions
 
 Binding decisions. Each was raised and answered before being recorded.
-Decisions 1–17 were locked together; 18 and 19 were added on 2026-11-08.
+Decisions 1–17 were locked together; 18 to 20 were added on 2026-11-08.
 
 ---
 
@@ -883,7 +883,8 @@ directory or child process survives clean shutdown.
 > `VoiceId` resolves through `(ModelId, SpeakerIndex)`. Live evidence for this
 > decision is in §4.1: `voice af_kore` crashed the service 51 times.
 
-**Status:** Decided.
+**Status:** Decided. **Refined by Decision 20:** how prefs store the voice
+while Python rollback is supported.
 
 **Current behavior.** A voice is an engine-local integer. `prefs.json` currently
 holds `voice: 9` for libritts. If a model ships reordered voices, that 9
@@ -1478,6 +1479,39 @@ without being misparsed as version 1.
 and 2, and non-integer versions; a socket test rejecting unversioned and
 `v: 2` requests; the gate test; both feature configurations in
 `tools/check`.
+
+---
+
+### Decision 20 — Voice Storage During Python Rollback
+
+**Status:** Decided 2026-11-08 (developer), on accepting slice B. Refines
+Decision 10's "Preferences store `"voice": "libritts:qorto"`".
+
+**Current behavior.** daemon.py reads `prefs.json` `voice` only when it is an
+integer, and falls back to voice 0 otherwise.
+
+**Alternatives considered.**
+
+- *Store the string identity in `voice`, as Decision 10 states.* Rejected
+  while rollback is supported: switching back to Python would silently
+  change the user's voice. That is the exact failure Decision 17 exists to
+  prevent, and section 9.2 item 8 requires rollback to work.
+
+**Decision.** While Python rollback is supported, `prefs.json` keeps `voice`
+as the integer speaker index, and stores the Decision 10 identity in an
+optional `voice_id` beside it. Rust writes both whenever a voice resolves.
+Once a committed catalogue exists, Rust prefers `voice_id` on load; if it no
+longer resolves, health reports that and the index is kept (Decision 10,
+crash and restart). When Python is retired (section 9.3 stage 12), a schema
+migration makes the string identity primary.
+
+**Justification.** Both promises hold at once: Python keeps reading the
+voice it understands, and the stable identity is recorded from the first
+write, so the later migration has nothing to guess.
+
+**Test evidence required.** The live Python file loads with `voice: 9` and
+writes it back as an integer; a string `voice` from schema 0 moves to
+`voice_id`; resolving a voice writes both fields.
 
 ---
 

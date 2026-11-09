@@ -100,7 +100,10 @@ From `rust-review.md` §4 and §6. All inside `vroca-core`, serde only.
 
 ### Slice B — Schema and state machine (DEC-17, §10.9)
 
-**Implemented 2026-11-08, awaiting developer acceptance.** Commits `091a568`
+**Done and accepted 2026-11-08.** The integer-plus-`voice_id` storage is
+now Decision 20. Next, by developer choice: commit the voice catalogue
+tables (DEC-10/11), so `voice N` and `voice <name>` resolve in the Rust
+daemon. Commits `091a568`
 (sentence splitter, parity-tested against Python), `9e29421` (channel and
 resolver shapes), `70be73b` (prefs schema v1 and migration), `08c202d`
 (typed `State::apply`, channel queues, preview restore), `e5e36b2` (prefs
