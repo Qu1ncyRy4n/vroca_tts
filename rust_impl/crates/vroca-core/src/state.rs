@@ -1,5 +1,5 @@
 use crate::operations::{Operation, Replace, ResetGroup, Scope, Unit};
-use crate::schema::{Aligner, EngineId, Position, Preferences, VoiceId};
+use crate::schema::{Aligner, EngineId, Position, Preferences};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpeechItem {
@@ -175,7 +175,8 @@ impl State {
                 }
                 ResetGroup::Speech => {
                     self.prefs.engine = EngineId::default_engine();
-                    self.prefs.voice = VoiceId("kokoro:af_bella".to_string());
+                    self.prefs.voice = 0;
+                    self.prefs.voice_id = None;
                     self.prefs.speed = 1.0;
                     self.prefs.aligner = Aligner::Asr;
                     self.bump_generation();

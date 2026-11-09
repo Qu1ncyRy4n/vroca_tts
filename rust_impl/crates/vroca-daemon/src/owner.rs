@@ -192,6 +192,7 @@ pub fn snapshot(daemon_id: &str, state: &State, health: &Health) -> RuntimeSnaps
         last_render_ms: None,
         avg_render_ms: None,
         health: health.clone(),
+        unknown_fields: Default::default(),
     }
 }
 

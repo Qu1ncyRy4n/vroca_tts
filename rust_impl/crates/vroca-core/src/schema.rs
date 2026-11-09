@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -220,39 +220,53 @@ impl Aligner {
     }
 }
 
-fn default_schema() -> u32 {
-    0
-}
-
+/// `prefs.json` at schema 1 (DEC-17). Read it with `prefs::load`, which
+/// migrates older files and corrects bad values; the derived `Deserialize`
+/// is for already-current data. Defaults match daemon.py.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Preferences {
-    #[serde(default = "default_schema")]
     pub schema: u32,
     pub engine: EngineId,
-    pub voice: VoiceId,
+    /// Engine-local speaker index, in Python's integer form, so a rollback to
+    /// the Python daemon keeps the selected voice (DEC-17 downgrade safety).
+    pub voice: i32,
+    /// Stable identity of the same voice when known (DEC-10). Python ignores
+    /// it; Rust prefers it over `voice` once catalogues are committed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice_id: Option<VoiceId>,
     pub speed: f32,
     pub aligner: Aligner,
     pub font_size: i32,
     pub words_visible: i32,
     pub position: Position,
+    /// Moved here from the `vroca-mode` file (DEC-7).
     pub overlay_mode: OverlayMode,
+    /// Master level 0–100 and per-voice trims keyed `engine:index`, as
+    /// daemon.py stores them (R8, §10.7b).
+    pub volume: i32,
+    pub trims: BTreeMap<String, i32>,
+    /// Fields this daemon does not know, kept so a newer writer's settings
+    /// survive a round trip (DEC-17 rule 3).
     #[serde(flatten)]
-    pub unknown_fields: HashMap<String, serde_json::Value>,
+    pub unknown_fields: BTreeMap<String, serde_json::Value>,
 }
 
 impl Default for Preferences {
     fn default() -> Self {
         Self {
-            schema: 1,
+            schema: crate::prefs::PREFS_SCHEMA,
             engine: EngineId::default_engine(),
-            voice: VoiceId("kokoro:af_bella".to_string()),
+            voice: 0,
+            voice_id: None,
             speed: 1.0,
             aligner: Aligner::Asr,
             font_size: 24,
             words_visible: 3,
             position: Position::Bottom,
             overlay_mode: OverlayMode::Subtitle,
-            unknown_fields: HashMap::new(),
+            volume: 100,
+            trims: BTreeMap::new(),
+            unknown_fields: BTreeMap::new(),
         }
     }
 }
@@ -315,4 +329,8 @@ pub struct RuntimeSnapshot {
     pub last_render_ms: Option<u64>,
     pub avg_render_ms: Option<u64>,
     pub health: Health,
+    /// Fields from a newer writer, preserved on a read-modify-write (DEC-17
+    /// rule 3). The daemon writes none of its own here.
+    #[serde(flatten)]
+    pub unknown_fields: BTreeMap<String, serde_json::Value>,
 }

@@ -6,6 +6,7 @@ pub mod catalogue;
 pub mod codec;
 pub mod operations;
 pub mod parser;
+pub mod prefs;
 pub mod schema;
 pub mod state;
 pub mod text;

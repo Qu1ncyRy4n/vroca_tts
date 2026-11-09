@@ -72,45 +72,6 @@ mod cases {
     }
 
     #[test]
-    fn test_schema_migration_and_unknown_fields() {
-        use crate::schema::Preferences;
-        use serde_json::json;
-
-        let unversioned_json = json!({
-            "engine": "libritts",
-            "voice": "libritts:qorto",
-            "speed": 1.5,
-            "aligner": "asr",
-            "font_size": 25,
-            "words_visible": 2,
-            "position": "center",
-            "overlay_mode": "scroll_rsvp",
-            "some_future_field": "hello"
-        });
-
-        let mut prefs: Preferences = serde_json::from_value(unversioned_json).unwrap();
-        assert_eq!(prefs.schema, 0); // Unversioned defaults to 0
-        assert_eq!(
-            prefs
-                .unknown_fields
-                .get("some_future_field")
-                .unwrap()
-                .as_str()
-                .unwrap(),
-            "hello"
-        );
-
-        // Migrate
-        prefs.schema = 1;
-        let written = serde_json::to_value(&prefs).unwrap();
-        assert_eq!(written.get("schema").unwrap().as_u64().unwrap(), 1);
-        assert_eq!(
-            written.get("some_future_field").unwrap().as_str().unwrap(),
-            "hello"
-        );
-    }
-
-    #[test]
     fn test_dec16_engine_id_rejects_unknown_on_deserialize() {
         // Review bug 11: the inner field used to be `pub`, so `EngineId("x")`
         // bypassed `new`. Now construction and deserialization both validate.
