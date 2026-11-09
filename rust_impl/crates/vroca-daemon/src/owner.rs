@@ -14,9 +14,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use crossbeam_channel::{unbounded, Receiver, Sender};
 use vroca_core::codec::Response;
-use vroca_core::operations::{Operation, ProtocolError};
-use vroca_core::schema::{Health, Preferences, RuntimeSnapshot};
-use vroca_core::state::State;
+use vroca_core::operations::{ErrorCode, Operation, ProtocolError};
+use vroca_core::schema::{Health, Preferences, RuntimeSnapshot, SpeakerIndex};
+use vroca_core::state::{Reply, State};
 
 use crate::player::{Player, PlayerEvent};
 
@@ -132,59 +132,80 @@ fn handle(
     health: &mut Health,
     op: Operation,
 ) -> Response {
-    match op {
-        Operation::Status => Response::Status {
+    let before = (
+        state.paused,
+        state.prefs.speed,
+        state.effective_volume(),
+        state.generation,
+    );
+    // `quit` answers "bye" here; the transport tears down after replying.
+    let response = match state.apply(op) {
+        Ok(Reply::Text(data)) => Response::String { data },
+        Ok(Reply::Status) => Response::Status {
             snapshot: Box::new(snapshot(daemon_id, state, health)),
         },
-        // The transport tears down after replying; the owner only answers.
-        Operation::Quit => Response::String { data: "bye".into() },
-        op => {
-            let (paused, speed, generation) = (state.paused, state.prefs.speed, state.generation);
-            state.apply(op);
-            // Derive player calls from the state change rather than per
-            // operation, so every path that pauses, retimes, or invalidates
-            // audio reaches the player the same way.
-            let mut results = Vec::new();
-            if state.generation != generation {
-                results.push(player.stop());
+        Ok(Reply::Catalogue(catalogue)) => Response::Catalogue {
+            data: serde_json::to_value(&catalogue.voices).unwrap_or_default(),
+        },
+        Ok(Reply::Preview(_voice)) => {
+            // No engine to synthesize with until slice E. DEC-14: the reading
+            // is restored on this failure path like any other.
+            state.end_preview();
+            Response::Error {
+                error: ProtocolError {
+                    code: ErrorCode::UnsupportedOperation,
+                    message: "preview failed: no engine is implemented yet".into(),
+                },
             }
-            if state.paused != paused {
-                results.push(player.set_paused(state.paused));
-            }
-            if state.prefs.speed != speed {
-                results.push(player.set_speed(state.prefs.speed));
-            }
-            for err in results.into_iter().filter_map(Result::err) {
-                health.degrade(err.problem());
-            }
-            Response::Ok
         }
+        Err(error) => Response::Error { error },
+    };
+    // Derive player calls from the state change rather than per operation,
+    // so every path that pauses, retimes, re-levels, or invalidates audio
+    // reaches the player the same way.
+    let (paused, speed, volume, generation) = before;
+    let mut results = Vec::new();
+    if state.generation != generation {
+        results.push(player.stop());
     }
+    if state.paused != paused {
+        results.push(player.set_paused(state.paused));
+    }
+    if state.prefs.speed != speed {
+        results.push(player.set_speed(state.prefs.speed));
+    }
+    if state.effective_volume() != volume {
+        results.push(player.set_volume(state.effective_volume()));
+    }
+    for err in results.into_iter().filter_map(Result::err) {
+        health.degrade(err.problem());
+    }
+    response
 }
 
 pub fn snapshot(daemon_id: &str, state: &State, health: &Health) -> RuntimeSnapshot {
+    let item = state.active_item();
     RuntimeSnapshot {
         schema: SNAPSHOT_SCHEMA,
         daemon_id: daemon_id.to_string(),
         // §7.5 is Open; this keeps today's behavior (current sentence only).
-        sentence: state
-            .sentences
-            .get(state.active_sentence_index)
+        sentence: item
+            .and_then(|i| i.sentences.get(i.index))
             .cloned()
             .unwrap_or_default(),
-        index: state.active_sentence_index,
-        total: state.sentences.len(),
+        index: item.map_or(0, |i| i.index),
+        total: item.map_or(0, |i| i.sentences.len()),
         paused: state.paused,
         speed: state.prefs.speed,
         rendered: 0,
         rendering: None,
         loaded: false,
-        voice: None,
+        voice: Some(SpeakerIndex(state.prefs.voice)),
         word: 0,
         engine: state.prefs.engine.clone(),
         engines: Vec::new(),
         aligner: state.prefs.aligner,
-        queue_len: state.waiting_queue.len(),
+        queue_len: state.waiting_len(),
         font_size: state.prefs.font_size,
         words_visible: state.prefs.words_visible,
         position: state.prefs.position,
@@ -301,7 +322,9 @@ mod tests {
         // dead-player error is recorded once, not per call.
         assert_eq!(
             client.request(parse_legacy("speed 1.5").unwrap()).unwrap(),
-            Response::Ok
+            Response::String {
+                data: "speed 1.50".into()
+            }
         );
         let after = status(&client);
         assert_eq!(after.speed, 1.5);
@@ -317,6 +340,8 @@ mod tests {
         client.request(parse_legacy("say hello").unwrap()).unwrap();
         client.request(parse_legacy("toggle").unwrap()).unwrap();
         client.request(parse_legacy("faster").unwrap()).unwrap();
+        client.request(parse_legacy("volume 60").unwrap()).unwrap();
+        client.request(parse_legacy("trim -15").unwrap()).unwrap();
         client.request(parse_legacy("stop").unwrap()).unwrap();
         owner.shutdown();
         assert_eq!(
@@ -324,12 +349,75 @@ mod tests {
             vec![
                 PlayerCall::Stop,
                 PlayerCall::SetPaused(true),
-                PlayerCall::SetSpeed(1.0_f32 + 0.15),
+                PlayerCall::SetSpeed(1.15),
+                PlayerCall::SetVolume(60),
+                PlayerCall::SetVolume(45),
                 PlayerCall::Stop,
                 PlayerCall::SetPaused(false),
                 PlayerCall::Shutdown,
             ]
         );
+    }
+
+    #[test]
+    fn dec14_preview_without_engine_fails_and_restores_reading() {
+        use vroca_core::catalogue::{Catalogue, CatalogueEntry};
+        use vroca_core::schema::{EngineId, SpeakerIndex};
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("vroca-state.json");
+        let (player, _handle) = FakePlayer::new();
+        // The owner has no catalogue to resolve against yet, so the first
+        // failure is not_found and nothing changes.
+        let owner = OwnerHandle::spawn(
+            OwnerConfig {
+                daemon_id: "test:1".into(),
+                snapshot_path: path,
+                prefs: Preferences::default(),
+            },
+            Box::new(player),
+        );
+        let client = owner.client();
+        client
+            .request(parse_legacy("say One. Two. Three.").unwrap())
+            .unwrap();
+        client.request(parse_legacy("next").unwrap()).unwrap();
+        match client.request(parse_legacy("preview 1").unwrap()).unwrap() {
+            Response::Error { error } => {
+                assert_eq!(error.code, vroca_core::operations::ErrorCode::NotFound)
+            }
+            other => panic!("{other:?}"),
+        }
+        let s = status(&client);
+        assert_eq!((s.index, s.paused), (1, false));
+        owner.shutdown();
+        // With a catalogue the preview resolves, then fails for lack of an
+        // engine, and the reading is restored exactly.
+        let mut state = State::new(Preferences::default());
+        state.set_catalogue(Catalogue::new(
+            EngineId::default_engine(),
+            vec![CatalogueEntry {
+                speaker: SpeakerIndex(1),
+                name: "af_bella".into(),
+            }],
+        ));
+        let (mut fake, _h) = FakePlayer::new();
+        let mut health = Health::Ok;
+        state
+            .apply(parse_legacy("say One. Two. Three.").unwrap())
+            .unwrap();
+        state.apply(parse_legacy("next").unwrap()).unwrap();
+        let reply = handle(
+            "t",
+            &mut state,
+            &mut fake,
+            &mut health,
+            parse_legacy("preview af_bella").unwrap(),
+        );
+        assert!(matches!(reply, Response::Error { ref error }
+            if error.code == vroca_core::operations::ErrorCode::UnsupportedOperation));
+        assert!(!state.previewing());
+        assert_eq!(state.active_item().map(|i| i.index), Some(1));
+        assert!(!state.paused);
     }
 
     #[test]

@@ -205,6 +205,9 @@ pub enum ErrorCode {
     Unavailable,
     Busy,
     Timeout,
+    /// The request is understood but this daemon cannot carry it out (named
+    /// in rust-spec.md §10.7a); used for capabilities not built yet.
+    UnsupportedOperation,
 }
 
 impl ErrorCode {
@@ -218,6 +221,7 @@ impl ErrorCode {
             ErrorCode::Unavailable => 4,
             ErrorCode::Busy | ErrorCode::Timeout => 5,
             ErrorCode::EngineFailure => 6,
+            ErrorCode::UnsupportedOperation => 7,
         }
     }
 }

@@ -90,7 +90,7 @@ impl VoiceRef {
 
 /// Validated engine identity (DEC-16). The inner string is private so the
 /// only constructor is `new`, and deserialization goes through the same check.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct EngineId(String);
 
@@ -157,6 +157,14 @@ impl Position {
             _ => None,
         }
     }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Bottom => "bottom",
+            Self::Top => "top",
+            Self::Center => "center",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -216,6 +224,13 @@ impl Aligner {
             "asr" => Some(Self::Asr),
             "energy" => Some(Self::Energy),
             _ => None,
+        }
+    }
+
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Asr => "asr",
+            Self::Energy => "energy",
         }
     }
 }

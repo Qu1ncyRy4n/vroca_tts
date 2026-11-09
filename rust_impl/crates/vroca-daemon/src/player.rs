@@ -35,6 +35,9 @@ pub trait Player: Send {
     fn attach(&mut self, events: EventSink);
     fn set_paused(&mut self, paused: bool) -> Result<(), PlayerError>;
     fn set_speed(&mut self, speed: f32) -> Result<(), PlayerError>;
+    /// Output level 0–100: master volume plus the current voice's trim,
+    /// applied in the player so cached audio is never re-leveled (§10.7b).
+    fn set_volume(&mut self, level: i32) -> Result<(), PlayerError>;
     /// Stop playback and drop anything loaded (rendered audio is stale).
     fn stop(&mut self) -> Result<(), PlayerError>;
     /// Release the player for good: terminate a child, close IPC. Called
@@ -47,6 +50,7 @@ pub trait Player: Send {
 pub enum PlayerCall {
     SetPaused(bool),
     SetSpeed(f32),
+    SetVolume(i32),
     Stop,
     Shutdown,
 }
@@ -109,6 +113,10 @@ impl Player for FakePlayer {
 
     fn set_speed(&mut self, speed: f32) -> Result<(), PlayerError> {
         self.record(PlayerCall::SetSpeed(speed))
+    }
+
+    fn set_volume(&mut self, level: i32) -> Result<(), PlayerError> {
+        self.record(PlayerCall::SetVolume(level))
     }
 
     fn stop(&mut self) -> Result<(), PlayerError> {

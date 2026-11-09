@@ -500,7 +500,7 @@ mod tests {
         drop(UnixListener::bind(dir.path().join(LEGACY_SOCKET)).unwrap());
         assert!(dir.path().join(LEGACY_SOCKET).exists());
         let (daemon, _p) = start(dir.path()).unwrap();
-        assert_eq!(legacy(dir.path(), b"stop"), "ok");
+        assert_eq!(legacy(dir.path(), b"stop"), "stopped");
         daemon.stop();
     }
 
@@ -570,9 +570,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (daemon, _p) = start(dir.path()).unwrap();
         // Review bug 1 end to end: socat sends a trailing newline.
-        assert_eq!(legacy(dir.path(), b"speed 1.5\n"), "ok");
+        assert_eq!(legacy(dir.path(), b"speed 1.5\n"), "speed 1.50");
         // Review bug 7: invalid UTF-8 gets a reply, not a hang.
-        assert_eq!(legacy(dir.path(), b"say caf\xc3"), "ok");
+        assert_eq!(legacy(dir.path(), b"say caf\xc3"), "reading 1");
         assert_eq!(legacy(dir.path(), b""), "unknown: ");
         let mut big = b"say ".to_vec();
         big.resize(MAX_REQUEST + 1, b'x');
@@ -582,7 +582,7 @@ mod tests {
         );
         let mut at_limit = b"say ".to_vec();
         at_limit.resize(MAX_REQUEST, b'x');
-        assert_eq!(legacy(dir.path(), &at_limit), "ok");
+        assert_eq!(legacy(dir.path(), &at_limit), "reading 1");
         // Still serving after all of it (D8).
         assert!(legacy(dir.path(), b"status").contains("\"speed\": 1.5"));
         daemon.stop();
@@ -636,7 +636,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (daemon, player) = start(dir.path()).unwrap();
         player.kill("mpv exited");
-        assert_eq!(legacy(dir.path(), b"toggle"), "ok");
+        // DEC-9 rule 3: control still answers with a dead player.
+        assert_eq!(legacy(dir.path(), b"say hello there"), "reading 1");
+        assert_eq!(legacy(dir.path(), b"toggle"), "paused");
         let status = legacy(dir.path(), b"status");
         assert!(status.contains("\"state\": \"degraded\""), "{status}");
         assert!(status.contains("player: mpv exited"), "{status}");
