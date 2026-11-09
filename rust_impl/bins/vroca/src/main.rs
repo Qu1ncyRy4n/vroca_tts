@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 use std::process::Command;
 use vroca_client::Client;
 use vroca_core::operations::{Operation, ProtocolError, Replace, ResetGroup, Scope, Unit};
-use vroca_core::schema::{EngineId, Position};
+use vroca_core::schema::{Aligner, EngineId, Position, VoiceRef};
 
 #[derive(Parser)]
 #[command(name = "vroca", about = "Vroca TTS command line interface")]
@@ -41,8 +41,8 @@ enum Commands {
     Slower,
     /// Set absolute speed
     Speed { value: f32 },
-    /// Set voice by index
-    Voice { sid: i32 },
+    /// Set voice by index, catalogue name, or engine:name
+    Voice { voice: String },
     /// Set engine
     Engine { name: String },
     /// Set aligner
@@ -66,8 +66,8 @@ enum Commands {
     Status,
     /// Print catalogue
     Catalogue,
-    /// Preview a voice by index
-    Preview { sid: i32 },
+    /// Preview a voice by index, catalogue name, or engine:name
+    Preview { voice: String },
     /// Unload engine
     Unload,
     /// Reload engine
@@ -88,6 +88,7 @@ fn map_command(cmd: Commands) -> Result<Option<Operation>, ProtocolError> {
             Ok(Some(Operation::Speak {
                 text: text.join(" "),
                 replace: Replace::All,
+                voice: None,
             }))
         }
         Commands::Queue { text } => {
@@ -97,6 +98,7 @@ fn map_command(cmd: Commands) -> Result<Option<Operation>, ProtocolError> {
             Ok(Some(Operation::Speak {
                 text: text.join(" "),
                 replace: Replace::None,
+                voice: None,
             }))
         }
         Commands::Stop => Ok(Some(Operation::Stop {
@@ -110,12 +112,20 @@ fn map_command(cmd: Commands) -> Result<Option<Operation>, ProtocolError> {
         Commands::Faster => Ok(Some(Operation::Faster)),
         Commands::Slower => Ok(Some(Operation::Slower)),
         Commands::Speed { value } => Ok(Some(Operation::SetSpeed { speed: value })),
-        Commands::Voice { sid } => Ok(Some(Operation::SetVoiceNumeric { sid })),
+        Commands::Voice { voice } => Ok(Some(Operation::SetVoice {
+            voice: VoiceRef::from_token(&voice),
+        })),
         Commands::Engine { name } => {
             let id = EngineId::new(&name).map_err(ProtocolError::invalid_argument)?;
             Ok(Some(Operation::SetEngine { id }))
         }
-        Commands::Aligner { name } => Ok(Some(Operation::SetAligner { name })),
+        Commands::Aligner { name } => match Aligner::from_name(&name) {
+            Some(aligner) => Ok(Some(Operation::SetAligner { aligner })),
+            None => Err(ProtocolError::invalid_argument(format!(
+                "unknown aligner: {name} (have {})",
+                Aligner::NAMES.join(", ")
+            ))),
+        },
         Commands::FontSize { size } => Ok(Some(Operation::SetFontSize { size })),
         Commands::WordsVisible { count } => Ok(Some(Operation::SetWordsVisible { count })),
         Commands::Position { pos } => {
@@ -133,7 +143,9 @@ fn map_command(cmd: Commands) -> Result<Option<Operation>, ProtocolError> {
         })),
         Commands::Status => Ok(Some(Operation::Status)),
         Commands::Catalogue => Ok(Some(Operation::Catalogue)),
-        Commands::Preview { sid } => Ok(Some(Operation::Preview { sid })),
+        Commands::Preview { voice } => Ok(Some(Operation::Preview {
+            voice: VoiceRef::from_token(&voice),
+        })),
         Commands::Unload => Ok(Some(Operation::Unload)),
         Commands::Reload => Ok(Some(Operation::Reload)),
         Commands::Quit => Ok(Some(Operation::Quit)),
@@ -217,7 +229,8 @@ mod tests {
             op,
             Operation::Speak {
                 text: "hello world".to_string(),
-                replace: Replace::All
+                replace: Replace::All,
+                voice: None,
             }
         );
     }

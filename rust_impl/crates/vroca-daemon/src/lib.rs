@@ -1,3 +1,5 @@
+#![forbid(unsafe_code)]
+
 pub mod player;
 
 use crossbeam_channel::{unbounded, Sender};

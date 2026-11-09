@@ -50,6 +50,7 @@ impl Client {
         self.send(Operation::Speak {
             text: text.to_string(),
             replace: vroca_core::operations::Replace::All,
+            voice: None,
         })
     }
 
@@ -57,6 +58,7 @@ impl Client {
         self.send(Operation::Speak {
             text: text.to_string(),
             replace: vroca_core::operations::Replace::None,
+            voice: None,
         })
     }
 }

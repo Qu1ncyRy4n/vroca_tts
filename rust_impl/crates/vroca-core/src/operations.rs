@@ -1,4 +1,4 @@
-use crate::schema::{EngineId, Position, VoiceId};
+use crate::schema::{Aligner, EngineId, OverlayMode, Position, VoiceRef};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -32,12 +32,35 @@ pub enum ResetGroup {
     Speech,
 }
 
+impl ResetGroup {
+    /// Legacy group names (DEC-15). Bare `reset` carries no group and means
+    /// `Everything`, which is why it has no name here.
+    pub const NAMES: [&'static str; 2] = ["overlay", "speech"];
+
+    pub fn from_name(name: &str) -> Option<Self> {
+        match name {
+            "overlay" => Some(Self::Overlay),
+            "speech" => Some(Self::Speech),
+            _ => None,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Operation {
-    Speak { text: String, replace: Replace },
-    Stop { scope: Scope },
-    Skip { unit: Unit },
+    Speak {
+        text: String,
+        replace: Replace,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        voice: Option<VoiceRef>,
+    },
+    Stop {
+        scope: Scope,
+    },
+    Skip {
+        unit: Unit,
+    },
     Toggle,
     Read,
     Pause,
@@ -47,22 +70,86 @@ pub enum Operation {
     Back,
     Faster,
     Slower,
-    SetSpeed { speed: f32 },
-    SetVoiceNumeric { sid: i32 },
-    SetVoiceId { id: VoiceId },
-    SetEngine { id: EngineId },
-    SetAligner { name: String },
-    SetFontSize { size: i32 },
-    SetWordsVisible { count: i32 },
-    SetPosition { pos: Position },
+    SetSpeed {
+        speed: f32,
+    },
+    SetVoice {
+        voice: VoiceRef,
+    },
+    SetEngine {
+        id: EngineId,
+    },
+    SetAligner {
+        aligner: Aligner,
+    },
+    SetFontSize {
+        size: i32,
+    },
+    SetWordsVisible {
+        count: i32,
+    },
+    SetPosition {
+        pos: Position,
+    },
+    SetVolume {
+        level: i32,
+    },
+    SetTrim {
+        amount: i32,
+    },
     CycleMode,
-    Reset { group: ResetGroup },
+    SetMode {
+        mode: OverlayMode,
+    },
+    Reset {
+        group: ResetGroup,
+    },
     Status,
     Catalogue,
-    Preview { sid: i32 },
+    Preview {
+        voice: VoiceRef,
+    },
     Unload,
     Reload,
     Quit,
+}
+
+impl Operation {
+    /// Wire names of every variant, as `#[serde(tag = "type")]` spells them.
+    /// The codec uses this to tell an unknown operation (`invalid_request`)
+    /// from a bad field inside a known one (`invalid_argument`).
+    pub const TYPE_NAMES: &'static [&'static str] = &[
+        "speak",
+        "stop",
+        "skip",
+        "toggle",
+        "read",
+        "pause",
+        "resume",
+        "read_selection",
+        "next",
+        "back",
+        "faster",
+        "slower",
+        "set_speed",
+        "set_voice",
+        "set_engine",
+        "set_aligner",
+        "set_font_size",
+        "set_words_visible",
+        "set_position",
+        "set_volume",
+        "set_trim",
+        "cycle_mode",
+        "set_mode",
+        "reset",
+        "status",
+        "catalogue",
+        "preview",
+        "unload",
+        "reload",
+        "quit",
+    ];
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

@@ -1,5 +1,5 @@
 use crate::operations::{Operation, Replace, ResetGroup, Scope, Unit};
-use crate::schema::{EngineId, Position, Preferences, VoiceId};
+use crate::schema::{Aligner, EngineId, Position, Preferences, VoiceId};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpeechItem {
@@ -32,7 +32,11 @@ impl State {
 
     pub fn apply(&mut self, op: Operation) {
         match op {
-            Operation::Speak { text, replace } => {
+            Operation::Speak {
+                text,
+                replace,
+                voice: _,
+            } => {
                 let item = SpeechItem { text };
                 match replace {
                     Replace::All => {
@@ -131,20 +135,17 @@ impl State {
             Operation::SetSpeed { speed } => {
                 self.prefs.speed = speed.clamp(0.5, 3.0);
             }
-            Operation::SetVoiceNumeric { sid: _ } => {
-                // Numeric resolution would happen here, bumping generation
-                self.bump_generation();
-            }
-            Operation::SetVoiceId { id } => {
-                self.prefs.voice = id;
+            Operation::SetVoice { voice: _ } => {
+                // Catalogue resolution to (ModelId, SpeakerIndex) is slice B;
+                // a voice change invalidates rendered audio regardless (N9).
                 self.bump_generation();
             }
             Operation::SetEngine { id } => {
                 self.prefs.engine = id;
                 self.bump_generation();
             }
-            Operation::SetAligner { name } => {
-                self.prefs.aligner = name;
+            Operation::SetAligner { aligner } => {
+                self.prefs.aligner = aligner;
             }
             Operation::SetFontSize { size } => {
                 self.prefs.font_size = size.clamp(12, 72);
@@ -156,13 +157,10 @@ impl State {
                 self.prefs.position = pos;
             }
             Operation::CycleMode => {
-                use crate::schema::OverlayMode::*;
-                self.prefs.overlay_mode = match self.prefs.overlay_mode {
-                    Subtitle => Rsvp,
-                    Rsvp => ScrollRsvp,
-                    ScrollRsvp => Off,
-                    Off => Subtitle,
-                };
+                self.prefs.overlay_mode = self.prefs.overlay_mode.next();
+            }
+            Operation::SetMode { mode } => {
+                self.prefs.overlay_mode = mode;
             }
             Operation::Reset { group } => match group {
                 ResetGroup::Everything => {
@@ -177,10 +175,10 @@ impl State {
                     self.prefs.overlay_mode = crate::schema::OverlayMode::Subtitle;
                 }
                 ResetGroup::Speech => {
-                    self.prefs.engine = EngineId("kokoro".to_string());
+                    self.prefs.engine = EngineId::default_engine();
                     self.prefs.voice = VoiceId("kokoro:af_bella".to_string());
                     self.prefs.speed = 1.0;
-                    self.prefs.aligner = "asr".to_string();
+                    self.prefs.aligner = Aligner::Asr;
                     self.bump_generation();
                 }
             },

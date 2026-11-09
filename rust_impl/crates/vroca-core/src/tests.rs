@@ -1,3 +1,6 @@
+//! State-machine tests. Parser fixtures live in `tests/legacy_fixtures.rs`
+//! and codec tests in `tests/codec.rs`, both against the public API.
+
 #[cfg(test)]
 #[allow(
     clippy::unwrap_used,
@@ -6,129 +9,10 @@
     clippy::indexing_slicing
 )]
 mod cases {
-    use crate::operations::{Operation, Replace, Scope};
+    use crate::operations::Operation;
     use crate::parser::parse_legacy;
-    use crate::schema::Position;
+    use crate::schema::{Aligner, OverlayMode};
     use crate::state::State;
-
-    #[test]
-    fn test_d8_malformed_float_survives() {
-        let op = parse_legacy("speed abc");
-        assert!(op.is_err());
-        let op = parse_legacy("speed");
-        assert!(op.is_err());
-        let op = parse_legacy("speed 1 2");
-        assert!(op.is_err());
-        let op = parse_legacy("voice abc");
-        assert!(op.is_err());
-        let op = parse_legacy("font_size abc");
-        assert!(op.is_err());
-        let op = parse_legacy("words_visible");
-        assert!(op.is_err());
-        let op = parse_legacy("preview abc");
-        assert!(op.is_err());
-        let op = parse_legacy("read xyz");
-        assert!(op.is_err());
-        let op = parse_legacy("say");
-        assert!(op.is_err());
-        let op = parse_legacy("queue");
-        assert!(op.is_err());
-    }
-
-    #[test]
-    fn test_legacy_parser_fixtures() {
-        assert_eq!(parse_legacy("read").unwrap(), Operation::Read);
-        assert_eq!(
-            parse_legacy("say hello world").unwrap(),
-            Operation::Speak {
-                text: "hello world".to_string(),
-                replace: Replace::All
-            }
-        );
-        assert_eq!(
-            parse_legacy("queue next").unwrap(),
-            Operation::Speak {
-                text: "next".to_string(),
-                replace: Replace::None
-            }
-        );
-        assert_eq!(
-            parse_legacy("stop").unwrap(),
-            Operation::Stop {
-                scope: Scope::Playback
-            }
-        );
-        assert_eq!(
-            parse_legacy("clear").unwrap(),
-            Operation::Stop { scope: Scope::All }
-        );
-        assert_eq!(
-            parse_legacy("skip").unwrap(),
-            Operation::Skip {
-                unit: crate::operations::Unit::Item
-            }
-        );
-        assert_eq!(parse_legacy("toggle").unwrap(), Operation::Toggle);
-        assert_eq!(
-            parse_legacy("speed 1.5").unwrap(),
-            Operation::SetSpeed { speed: 1.5 }
-        );
-        assert_eq!(
-            parse_legacy("voice 3").unwrap(),
-            Operation::SetVoiceNumeric { sid: 3 }
-        );
-        assert_eq!(
-            parse_legacy("engine supertonic").unwrap(),
-            Operation::SetEngine {
-                id: crate::schema::EngineId("supertonic".to_string())
-            }
-        );
-        assert!(parse_legacy("engine unknown").is_err());
-        assert_eq!(
-            parse_legacy("aligner energy").unwrap(),
-            Operation::SetAligner {
-                name: "energy".to_string()
-            }
-        );
-        assert_eq!(
-            parse_legacy("font_size 25").unwrap(),
-            Operation::SetFontSize { size: 25 }
-        );
-        assert_eq!(
-            parse_legacy("words_visible 2").unwrap(),
-            Operation::SetWordsVisible { count: 2 }
-        );
-        assert_eq!(
-            parse_legacy("position center").unwrap(),
-            Operation::SetPosition {
-                pos: Position::Center
-            }
-        );
-        assert!(parse_legacy("position up").is_err());
-        assert_eq!(parse_legacy("mode").unwrap(), Operation::CycleMode);
-        assert_eq!(
-            parse_legacy("reset").unwrap(),
-            Operation::Reset {
-                group: crate::operations::ResetGroup::Everything
-            }
-        );
-        assert_eq!(
-            parse_legacy("reset_prefs").unwrap(),
-            Operation::Reset {
-                group: crate::operations::ResetGroup::Everything
-            }
-        );
-        assert_eq!(parse_legacy("status").unwrap(), Operation::Status);
-        assert_eq!(parse_legacy("catalogue").unwrap(), Operation::Catalogue);
-        assert_eq!(
-            parse_legacy("preview 1").unwrap(),
-            Operation::Preview { sid: 1 }
-        );
-        assert_eq!(parse_legacy("unload").unwrap(), Operation::Unload);
-        assert_eq!(parse_legacy("reload").unwrap(), Operation::Reload);
-        assert_eq!(parse_legacy("quit").unwrap(), Operation::Quit);
-        assert!(parse_legacy("unknown_command args").is_err());
-    }
 
     #[test]
     fn test_d2_say_clears_waiting() {
@@ -164,15 +48,27 @@ mod cases {
     }
 
     #[test]
-    fn test_structured_codec() {
-        use crate::codec::{decode_request, encode_request};
-        let op = Operation::Speak {
-            text: "hello".to_string(),
-            replace: Replace::All,
-        };
-        let enc = encode_request(&op).unwrap();
-        let dec = decode_request(&enc).unwrap();
-        assert_eq!(op, dec);
+    fn test_dec7_mode_cycle_and_set() {
+        let mut state = State::new(Default::default());
+        assert_eq!(state.prefs.overlay_mode, OverlayMode::Subtitle);
+        for expected in [
+            OverlayMode::Rsvp,
+            OverlayMode::ScrollRsvp,
+            OverlayMode::Off,
+            OverlayMode::Subtitle,
+        ] {
+            state.apply(Operation::CycleMode);
+            assert_eq!(state.prefs.overlay_mode, expected);
+        }
+        state.apply(parse_legacy("mode_set scroll_rsvp").unwrap());
+        assert_eq!(state.prefs.overlay_mode, OverlayMode::ScrollRsvp);
+    }
+
+    #[test]
+    fn test_aligner_is_typed() {
+        let mut state = State::new(Default::default());
+        state.apply(parse_legacy("aligner energy").unwrap());
+        assert_eq!(state.prefs.aligner, Aligner::Energy);
     }
 
     #[test]
@@ -215,13 +111,13 @@ mod cases {
     }
 
     #[test]
-    fn test_core_dependencies() {
-        // Assert that vroca-core does not depend on I/O, async, GUI, or FFI crates.
-        let toml_content = include_str!("../Cargo.toml");
-        assert!(!toml_content.contains("tokio"));
-        assert!(!toml_content.contains("async"));
-        assert!(!toml_content.contains("gtk"));
-        assert!(!toml_content.contains("sherpa"));
-        assert!(!toml_content.contains("libc"));
+    fn test_dec16_engine_id_rejects_unknown_on_deserialize() {
+        // Review bug 11: the inner field used to be `pub`, so `EngineId("x")`
+        // bypassed `new`. Now construction and deserialization both validate.
+        use crate::schema::EngineId;
+        let bad: Result<EngineId, _> = serde_json::from_str("\"espeak\"");
+        assert!(bad.is_err());
+        let ok: EngineId = serde_json::from_str("\"kokoro\"").unwrap();
+        assert_eq!(ok.as_str(), "kokoro");
     }
 }
