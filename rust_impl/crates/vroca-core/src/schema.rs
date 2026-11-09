@@ -207,9 +207,35 @@ impl Default for Preferences {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Health {
-    pub status: String,
+/// Daemon health as published in the snapshot (DEC-9 rule 3, N4). A dead
+/// player or a failing snapshot write is visible here instead of stalling
+/// silently; control operations keep working while degraded.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum Health {
+    #[default]
+    Ok,
+    Degraded {
+        problems: Vec<String>,
+    },
+}
+
+impl Health {
+    /// Record a problem once; repeating the same problem is not a change.
+    pub fn degrade(&mut self, problem: String) {
+        match self {
+            Self::Ok => {
+                *self = Self::Degraded {
+                    problems: vec![problem],
+                }
+            }
+            Self::Degraded { problems } => {
+                if !problems.contains(&problem) {
+                    problems.push(problem);
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -224,7 +250,9 @@ pub struct RuntimeSnapshot {
     pub rendered: usize,
     pub rendering: Option<usize>,
     pub loaded: bool,
-    pub voice: SpeakerIndex,
+    /// `null` until the voice resolves against a catalogue (DEC-10); never a
+    /// guessed index.
+    pub voice: Option<SpeakerIndex>,
     pub word: i32,
     pub engine: EngineId,
     pub engines: Vec<EngineId>,
@@ -236,4 +264,5 @@ pub struct RuntimeSnapshot {
     pub voices: Option<usize>,
     pub last_render_ms: Option<u64>,
     pub avg_render_ms: Option<u64>,
+    pub health: Health,
 }

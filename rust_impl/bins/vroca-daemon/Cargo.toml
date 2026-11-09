@@ -11,5 +11,8 @@ path = "src/main.rs"
 [lints]
 workspace = true
 
+[features]
+transport = ["vroca-daemon/transport"]
+
 [dependencies]
 vroca-daemon.workspace = true

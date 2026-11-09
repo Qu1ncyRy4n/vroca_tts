@@ -6,6 +6,10 @@ edition.workspace = true
 [lints]
 workspace = true
 
+[features]
+# DEC-18: the socket round trip and the journalctl `log` shortcut.
+transport = ["vroca-client/transport"]
+
 [dependencies]
 vroca-client.workspace = true
 vroca-core.workspace = true

@@ -1396,10 +1396,12 @@ accepts slices one at a time.
 **Decision.** Section 8 remains the binding boundary. The out-of-scope code
 is **feature-gated, off by default**, and leaves first-slice acceptance:
 
-1. `vroca-daemon` puts the two `UnixListener`s, the fake player, and the
-   connection threads behind a cargo feature `transport`. With default
-   features the crate builds with no socket, child process, or systemd code,
-   and a test asserts it.
+1. `vroca-daemon` puts the two `UnixListener`s, the lock file, the temp
+   directory, and the connection threads behind a cargo feature `transport`.
+   With default features the crate builds with no socket, child process, or
+   systemd code, and a test asserts it. (Implemented in slice C: the old
+   `sleep`-spawning fake player was replaced by an in-process `FakePlayer`
+   behind the DEC-9 `Player` trait, so it needs no gate.)
 2. `vroca-client` puts the `UnixStream` transport behind the same feature
    name. The typed API and local validation (Decision 5) stay unconditional.
 3. The `vroca` CLI keeps `journalctl` (`log`) and the socket round trip

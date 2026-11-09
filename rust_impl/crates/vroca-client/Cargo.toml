@@ -6,6 +6,10 @@ edition.workspace = true
 [lints]
 workspace = true
 
+[features]
+# DEC-18: the Unix-socket round trip.
+transport = []
+
 [dependencies]
 vroca-core.workspace = true
 serde.workspace = true

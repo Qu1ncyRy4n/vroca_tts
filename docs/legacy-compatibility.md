@@ -116,7 +116,7 @@ exit status **separately** from socket fixtures.
 
 | Path | Current writers | Rust target | Finding |
 | --- | --- | --- | --- |
-| `vroca-state.json` | daemon only, atomic | Gains schema version. Written on state change, **not** on every mpv position tick. Must be detectably stale after daemon exit. | N16, → DEC-8 |
+| `vroca-state.json` | daemon only, atomic | Rust (slice C) adds `health` (`{"state":"ok"}` or `{"state":"degraded","problems":[…]}`, the counterpart of Python's `player_alive`) and writes `voice` as `null` until the voice resolves against a catalogue, never a guessed index. Gains schema version. Written on state change, **not** on every mpv position tick. Must be detectably stale after daemon exit. | N16, → DEC-8 |
 | `vroca-mode` | **daemon and panel** | Daemon only, as a read-only mirror of a `prefs.json` field. | N14, → DEC-7 |
 | `prefs.json` | daemon only, atomic; corrupt file silently reverts every setting | Gains schema version, explicit migration, unknown-field preservation, and quarantine-plus-report on corruption. | → DEC-17 |
 | `vroca-mpv.sock` | daemon; path unconditionally unlinked at startup | Per-instance path. No daemon may unlink a path it does not own. | N1, → DEC-9 |

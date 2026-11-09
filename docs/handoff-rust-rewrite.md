@@ -118,6 +118,15 @@ From `rust-review.md` §4 and §6. All inside `vroca-core`, serde only.
 
 ### Slice C — Daemon transport (DEC-18, §7.3, §7.8 decided)
 
+**Implemented 2026-11-08, awaiting developer acceptance.** The `transport`
+feature stays off by default until then. Code: `vroca-daemon/src/{owner,
+player,transport}.rs`, `tests/dec18_default_features.rs`; `tools/check` runs
+default and `--all-features`. Bug 10 is closed with a `vroca.lock`
+`File::try_lock` (kept after exit by design). Deferred: SIGTERM handling
+(DEC-9 rule 2) needs a signal mechanism without `unsafe` and lands with the
+real mpv player in slice E; legacy reply shapes beyond errors (`voice N`,
+`playing N sentences`) come from `State::apply` in slice B.
+
 - First: gate the existing socket, player, and `journalctl` code behind the
   `transport` feature per DEC-18, with the default-features assertion test and
   `tools/check` running both configurations.

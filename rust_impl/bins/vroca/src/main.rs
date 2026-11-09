@@ -1,10 +1,12 @@
 #![forbid(unsafe_code)]
 
 use clap::{Parser, Subcommand};
-use std::process::Command;
-use vroca_client::Client;
+use std::process::ExitCode;
 use vroca_core::operations::{Operation, ProtocolError, Replace, ResetGroup, Scope, Unit};
 use vroca_core::schema::{Aligner, EngineId, Position, VoiceRef};
+
+#[cfg(feature = "transport")]
+mod transport;
 
 #[derive(Parser)]
 #[command(name = "vroca", about = "Vroca TTS command line interface")]
@@ -153,65 +155,51 @@ fn map_command(cmd: Commands) -> Result<Option<Operation>, ProtocolError> {
     }
 }
 
-fn print_json<T: serde::Serialize>(value: &T) {
-    match serde_json::to_string_pretty(value) {
-        Ok(text) => println!("{text}"),
-        Err(e) => eprintln!("error: could not render reply: {e}"),
-    }
-}
-
-fn main() -> std::process::ExitCode {
+fn main() -> ExitCode {
     let cli = Cli::parse();
 
     let cmd = cli.command.unwrap_or(Commands::Read);
 
     if matches!(cmd, Commands::Log) {
-        let status = Command::new("journalctl")
-            .args(["--user", "-u", "vroca", "-u", "vroca-overlay", "-f"])
-            .status();
-
-        match status {
-            Ok(s) if s.success() => return std::process::ExitCode::SUCCESS,
-            _ => return std::process::ExitCode::FAILURE,
-        }
+        return run_log();
     }
 
     let op = match map_command(cmd) {
         Ok(Some(op)) => op,
-        Ok(None) => return std::process::ExitCode::SUCCESS,
+        Ok(None) => return ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("error: {}", e.message);
-            return std::process::ExitCode::from(e.exit_code());
+            return ExitCode::from(e.exit_code());
         }
     };
 
-    let runtime_dir = std::env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "/tmp".to_string());
-    let socket_path = std::path::PathBuf::from(runtime_dir).join("vroca-v1.sock");
+    run_op(op)
+}
 
-    let client = Client::new(socket_path);
-    match client.send(op) {
-        Ok(res) => {
-            match res {
-                vroca_core::codec::Response::Ok => {}
-                vroca_core::codec::Response::String { data } => println!("{}", data),
-                vroca_core::codec::Response::Status { snapshot } => {
-                    print_json(&snapshot);
-                }
-                vroca_core::codec::Response::Catalogue { data } => {
-                    print_json(&data);
-                }
-                vroca_core::codec::Response::Error { error } => {
-                    eprintln!("error: {}", error.message);
-                    return std::process::ExitCode::from(error.exit_code());
-                }
-            }
-            std::process::ExitCode::SUCCESS
-        }
-        Err(e) => {
-            eprintln!("error: {}", e.message);
-            std::process::ExitCode::from(e.exit_code())
-        }
-    }
+#[cfg(feature = "transport")]
+fn run_log() -> ExitCode {
+    transport::log()
+}
+
+#[cfg(feature = "transport")]
+fn run_op(op: Operation) -> ExitCode {
+    transport::send(op)
+}
+
+#[cfg(not(feature = "transport"))]
+fn run_log() -> ExitCode {
+    without_transport()
+}
+
+#[cfg(not(feature = "transport"))]
+fn run_op(_op: Operation) -> ExitCode {
+    without_transport()
+}
+
+#[cfg(not(feature = "transport"))]
+fn without_transport() -> ExitCode {
+    eprintln!("error: vroca was built without the `transport` feature (rust-spec.md DEC-18)");
+    ExitCode::FAILURE
 }
 
 #[cfg(test)]

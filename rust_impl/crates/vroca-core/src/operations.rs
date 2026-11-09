@@ -211,6 +211,13 @@ impl ProtocolError {
         }
     }
 
+    pub fn unavailable(msg: impl Into<String>) -> Self {
+        Self {
+            code: ErrorCode::Unavailable,
+            message: msg.into(),
+        }
+    }
+
     pub fn not_found(msg: impl Into<String>) -> Self {
         Self {
             code: ErrorCode::NotFound,
