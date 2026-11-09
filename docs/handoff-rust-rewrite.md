@@ -100,6 +100,18 @@ From `rust-review.md` §4 and §6. All inside `vroca-core`, serde only.
 
 ### Slice B — Schema and state machine (DEC-17, §10.9)
 
+**Implemented 2026-11-08, awaiting developer acceptance.** Commits `091a568`
+(sentence splitter, parity-tested against Python), `9e29421` (channel and
+resolver shapes), `70be73b` (prefs schema v1 and migration), `08c202d`
+(typed `State::apply`, channel queues, preview restore), `e5e36b2` (prefs
+persistence). Interface choices to review: `voice` stays the integer index
+with `voice_id` beside it (rollback safety over DEC-10's string form);
+`ErrorCode::UnsupportedOperation` (exit 7) for capabilities not yet built;
+`Player::set_volume`. Not done here, and not on this list: committed voice
+catalogues (DEC-10/11 proquint tables), the DEC-7 `vroca-mode` mirror
+write, `volume`/`trim`/`effective_volume` in the snapshot, and selection
+capture for `read`.
+
 - `Preferences` must load the live Python file: `"voice": 9` integer form,
   missing `overlay_mode` and `schema` (bug 12). Write a v0→v1 migration as a
   pure `fn(Value) -> Result<Value, _>` step in an ordered list; the daemon does

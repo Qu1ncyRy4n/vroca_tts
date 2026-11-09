@@ -17,6 +17,23 @@ fixes client argument forwarding (D5) and adds the Mac client/runtime and servic
 interfaces documented in [`installation.md`](installation.md). These changes
 do not establish Rust parity.
 
+**Rust slice B (2026-11-08).** The Rust daemon answers every request with
+daemon.py's reply text, and loads, migrates, and rewrites the live
+`prefs.json` (keeping `voice` an integer, so rolling back to Python keeps the
+voice). Known differences, each deliberate:
+
+- `reset overlay` / `reset speech` are new (DEC-15); an unknown group is
+  `invalid_argument`, where Python replies `unknown: reset <x>`.
+- Until slice E, `read` while idle, `catalogue`, and `preview` return
+  `unsupported_operation`, and `reload` returns `engine_failure`, instead of
+  acting.
+- `voice <name>`, `voice N`, and `--voice` resolve only against committed
+  voice catalogues (DEC-11). None are committed yet, so they return
+  `not_found` rather than guessing.
+- Text that normalizes to nothing (`say **`) is `invalid_argument` with
+  Python's `empty` / `empty text` message, and the state is left untouched.
+  Python cleared the queue before saying `empty`.
+
 ## How To Use This Document
 
 Before a Rust command may be called compatible, it needs a fixture covering all

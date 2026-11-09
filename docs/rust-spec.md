@@ -2266,3 +2266,9 @@ but three things there MUST be shaped so this stays cheap:
 
 Do not build channels, residency, chunking, or local voice sources in the first
 slice. Reserve the shape; decide the questions in §10.8 first.
+
+**Implemented in slice B (2026-11-08).** `ChannelId` rides on `Speak`, `Stop`,
+and `Skip`, optional on the wire and accepting only `default`, so 10-b stays
+Open; the playback controls carry none, so 10-d stays Open. `Catalogue`
+resolves a `VoiceRef` to `ResolvedVoice { id, model: ModelId, speaker }`.
+`State` keys its queues by `ChannelId`.
