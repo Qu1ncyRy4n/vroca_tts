@@ -8,6 +8,56 @@ pub struct VoiceId(pub String);
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SpeakerIndex(pub i32);
 
+/// A speech channel (§10.4). Queue state is keyed by channel from the start
+/// (§10.9), but only `default` exists: how channels are named is §10.8 10-b,
+/// still Open, so any other name is rejected rather than decided implicitly.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct ChannelId(String);
+
+impl ChannelId {
+    pub const DEFAULT: &'static str = "default";
+
+    pub fn new(name: &str) -> Result<Self, String> {
+        if name == Self::DEFAULT {
+            Ok(Self(name.to_string()))
+        } else {
+            Err(format!(
+                "unknown channel: {name} (only \"{}\" exists; rust-spec.md §10.8 10-b)",
+                Self::DEFAULT
+            ))
+        }
+    }
+
+    pub fn is_default(&self) -> bool {
+        self.0 == Self::DEFAULT
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl Default for ChannelId {
+    fn default() -> Self {
+        Self(Self::DEFAULT.to_string())
+    }
+}
+
+impl TryFrom<String> for ChannelId {
+    type Error = String;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Self::new(&value)
+    }
+}
+
+impl From<ChannelId> for String {
+    fn from(id: ChannelId) -> Self {
+        id.0
+    }
+}
+
 /// A voice as a client addresses it, before catalogue resolution (DEC-10).
 ///
 /// The legacy socket accepts an index, a bare catalogue name, or an

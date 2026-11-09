@@ -2,6 +2,7 @@
 //! the structured codec. Serde only (DEC-2); no I/O, no `unsafe` (§7.6).
 #![forbid(unsafe_code)]
 
+pub mod catalogue;
 pub mod codec;
 pub mod operations;
 pub mod parser;

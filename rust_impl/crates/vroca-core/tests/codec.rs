@@ -12,22 +12,14 @@ use vroca_core::schema::{Aligner, EngineId, OverlayMode, Position, VoiceId, Voic
 
 fn every_operation() -> Vec<Operation> {
     vec![
-        Operation::Speak {
-            text: "hello".into(),
-            replace: Replace::All,
-            voice: None,
-        },
-        Operation::Speak {
-            text: "hello".into(),
-            replace: Replace::None,
-            voice: Some(VoiceRef::Qualified(VoiceId("kokoro:af_kore".into()))),
-        },
-        Operation::Stop {
-            scope: Scope::Queue,
-        },
-        Operation::Skip {
-            unit: Unit::Sentence,
-        },
+        Operation::speak("hello", Replace::All, None),
+        Operation::speak(
+            "hello",
+            Replace::None,
+            Some(VoiceRef::Qualified(VoiceId("kokoro:af_kore".into()))),
+        ),
+        Operation::stop(Scope::Queue),
+        Operation::skip(Unit::Sentence),
         Operation::Toggle,
         Operation::Read,
         Operation::Pause,
@@ -112,6 +104,23 @@ fn dec16_scroll_rsvp_wire_spelling() {
 }
 
 #[test]
+fn s10_9_channel_defaults_and_rejects_undecided_names() {
+    // Absent means the default channel, so v1 requests without it still parse.
+    assert_eq!(
+        decode_request(br#"{"v":1,"type":"stop","scope":"all"}"#).unwrap(),
+        Operation::stop(Scope::All)
+    );
+    assert_eq!(
+        decode_request(br#"{"v":1,"type":"stop","channel":"default","scope":"all"}"#).unwrap(),
+        Operation::stop(Scope::All)
+    );
+    // Naming other channels is §10.8 10-b, still Open.
+    let e = decode_request(br#"{"v":1,"type":"stop","channel":"architect","scope":"all"}"#)
+        .unwrap_err();
+    assert_eq!(e.code, ErrorCode::InvalidArgument, "{e:?}");
+}
+
+#[test]
 fn dec19_version_is_required_and_must_be_1() {
     let e = decode_request(br#"{"type":"status"}"#).unwrap_err();
     assert_eq!(e.code, ErrorCode::InvalidRequest);
@@ -189,12 +198,7 @@ fn dec1_unknown_policy_value_is_invalid_argument() {
 
 #[test]
 fn speak_without_voice_omits_the_field() {
-    let bytes = encode_request(&Operation::Speak {
-        text: "hi".into(),
-        replace: Replace::All,
-        voice: None,
-    })
-    .unwrap();
+    let bytes = encode_request(&Operation::speak("hi", Replace::All, None)).unwrap();
     assert_eq!(
         String::from_utf8(bytes).unwrap(),
         r#"{"v":1,"type":"speak","text":"hi","replace":"all"}"#

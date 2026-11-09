@@ -36,6 +36,7 @@ impl State {
                 text,
                 replace,
                 voice: _,
+                channel: _,
             } => {
                 let item = SpeechItem { text };
                 match replace {
@@ -64,7 +65,7 @@ impl State {
                     }
                 }
             }
-            Operation::Stop { scope } => match scope {
+            Operation::Stop { scope, .. } => match scope {
                 Scope::Playback => {
                     self.active_item = None;
                     self.paused = false;
@@ -82,7 +83,7 @@ impl State {
                     self.bump_generation();
                 }
             },
-            Operation::Skip { unit } => match unit {
+            Operation::Skip { unit, .. } => match unit {
                 Unit::Item => {
                     self.active_item = None;
                     self.paused = false;
@@ -108,9 +109,7 @@ impl State {
             }
             Operation::ReadSelection | Operation::Read => {
                 if self.active_item.is_some() {
-                    self.apply(Operation::Stop {
-                        scope: Scope::Playback,
-                    });
+                    self.apply(Operation::stop(Scope::Playback));
                 } else {
                     // Handled externally for the actual clipboard read,
                     // but the state machine itself just treats it as stopping if active.
@@ -165,7 +164,7 @@ impl State {
             Operation::Reset { group } => match group {
                 ResetGroup::Everything => {
                     self.prefs = Default::default();
-                    self.apply(Operation::Stop { scope: Scope::All });
+                    self.apply(Operation::stop(Scope::All));
                     self.bump_generation();
                 }
                 ResetGroup::Overlay => {

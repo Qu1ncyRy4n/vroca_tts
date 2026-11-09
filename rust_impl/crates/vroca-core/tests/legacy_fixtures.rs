@@ -64,11 +64,7 @@ fn req(message: &'static str) -> Expect {
 }
 
 fn speak(text: &str, replace: Replace, voice: Option<VoiceRef>) -> Operation {
-    Operation::Speak {
-        text: text.to_string(),
-        replace,
-        voice,
-    }
+    Operation::speak(text, replace, voice)
 }
 
 fn engine(name: &str) -> EngineId {
@@ -94,9 +90,7 @@ fn fixtures() -> Vec<Fixture> {
             V,
             "DEC-1",
             "stop",
-            op(Operation::Stop {
-                scope: Scope::Playback,
-            }),
+            op(Operation::stop(Scope::Playback)),
         ),
         f(
             "stop",
@@ -110,14 +104,14 @@ fn fixtures() -> Vec<Fixture> {
             V,
             "DEC-1",
             "clear",
-            op(Operation::Stop { scope: Scope::All }),
+            op(Operation::stop(Scope::All)),
         ),
         f(
             "skip",
             V,
             "DEC-1 D3",
             "skip",
-            op(Operation::Skip { unit: Unit::Item }),
+            op(Operation::skip(Unit::Item)),
         ),
         f("toggle", V, "DEC-13", "toggle", op(Operation::Toggle)),
         f(

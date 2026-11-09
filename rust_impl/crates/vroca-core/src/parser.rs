@@ -45,11 +45,9 @@ pub fn parse_legacy(input: &str) -> Result<Operation, ProtocolError> {
 
     match verb {
         "read" => bare(Operation::Read),
-        "stop" => bare(Operation::Stop {
-            scope: Scope::Playback,
-        }),
-        "clear" => bare(Operation::Stop { scope: Scope::All }),
-        "skip" => bare(Operation::Skip { unit: Unit::Item }),
+        "stop" => bare(Operation::stop(Scope::Playback)),
+        "clear" => bare(Operation::stop(Scope::All)),
+        "skip" => bare(Operation::skip(Unit::Item)),
         "toggle" => bare(Operation::Toggle),
         "next" => bare(Operation::Next),
         "back" => bare(Operation::Back),
@@ -75,11 +73,7 @@ pub fn parse_legacy(input: &str) -> Result<Operation, ProtocolError> {
             } else {
                 Replace::All
             };
-            Ok(Operation::Speak {
-                text: text.to_string(),
-                replace,
-                voice,
-            })
+            Ok(Operation::speak(text, replace, voice))
         }
 
         "speed" => {

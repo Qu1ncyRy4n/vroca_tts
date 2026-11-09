@@ -87,27 +87,17 @@ fn map_command(cmd: Commands) -> Result<Option<Operation>, ProtocolError> {
             if text.is_empty() {
                 return Err(ProtocolError::invalid_request("text required"));
             }
-            Ok(Some(Operation::Speak {
-                text: text.join(" "),
-                replace: Replace::All,
-                voice: None,
-            }))
+            Ok(Some(Operation::speak(text.join(" "), Replace::All, None)))
         }
         Commands::Queue { text } => {
             if text.is_empty() {
                 return Err(ProtocolError::invalid_request("text required"));
             }
-            Ok(Some(Operation::Speak {
-                text: text.join(" "),
-                replace: Replace::None,
-                voice: None,
-            }))
+            Ok(Some(Operation::speak(text.join(" "), Replace::None, None)))
         }
-        Commands::Stop => Ok(Some(Operation::Stop {
-            scope: Scope::Playback,
-        })),
-        Commands::Clear => Ok(Some(Operation::Stop { scope: Scope::All })),
-        Commands::Skip => Ok(Some(Operation::Skip { unit: Unit::Item })),
+        Commands::Stop => Ok(Some(Operation::stop(Scope::Playback))),
+        Commands::Clear => Ok(Some(Operation::stop(Scope::All))),
+        Commands::Skip => Ok(Some(Operation::skip(Unit::Item))),
         Commands::Toggle => Ok(Some(Operation::Toggle)),
         Commands::Next => Ok(Some(Operation::Next)),
         Commands::Back => Ok(Some(Operation::Back)),
@@ -213,14 +203,7 @@ mod tests {
         let cli = Cli::try_parse_from(["vroca", "say", "hello", "world"]).unwrap();
         let cmd = cli.command.unwrap();
         let op = map_command(cmd).unwrap().unwrap();
-        assert_eq!(
-            op,
-            Operation::Speak {
-                text: "hello world".to_string(),
-                replace: Replace::All,
-                voice: None,
-            }
-        );
+        assert_eq!(op, Operation::speak("hello world", Replace::All, None));
     }
 
     #[test]

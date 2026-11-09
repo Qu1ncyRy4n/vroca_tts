@@ -33,19 +33,19 @@ impl Client {
     }
 
     pub fn speak(&self, text: &str) -> Result<Response, ProtocolError> {
-        self.send(Operation::Speak {
-            text: text.to_string(),
-            replace: vroca_core::operations::Replace::All,
-            voice: None,
-        })
+        self.send(Operation::speak(
+            text,
+            vroca_core::operations::Replace::All,
+            None,
+        ))
     }
 
     pub fn queue(&self, text: &str) -> Result<Response, ProtocolError> {
-        self.send(Operation::Speak {
-            text: text.to_string(),
-            replace: vroca_core::operations::Replace::None,
-            voice: None,
-        })
+        self.send(Operation::speak(
+            text,
+            vroca_core::operations::Replace::None,
+            None,
+        ))
     }
 }
 

@@ -1,4 +1,4 @@
-use crate::schema::{Aligner, EngineId, OverlayMode, Position, VoiceRef};
+use crate::schema::{Aligner, ChannelId, EngineId, OverlayMode, Position, VoiceRef};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -49,16 +49,26 @@ impl ResetGroup {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Operation {
+    // §10.9: queue operations carry a channel from the start. It is optional
+    // on the wire (absent means `default`), so v1 requests stay valid. The
+    // playback controls (toggle, next, back, pause, resume) carry none:
+    // whether they act per channel is §10.8 10-d, still Open.
     Speak {
+        #[serde(default, skip_serializing_if = "ChannelId::is_default")]
+        channel: ChannelId,
         text: String,
         replace: Replace,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         voice: Option<VoiceRef>,
     },
     Stop {
+        #[serde(default, skip_serializing_if = "ChannelId::is_default")]
+        channel: ChannelId,
         scope: Scope,
     },
     Skip {
+        #[serde(default, skip_serializing_if = "ChannelId::is_default")]
+        channel: ChannelId,
         unit: Unit,
     },
     Toggle,
@@ -115,6 +125,32 @@ pub enum Operation {
 }
 
 impl Operation {
+    /// `Speak` on the default channel.
+    pub fn speak(text: impl Into<String>, replace: Replace, voice: Option<VoiceRef>) -> Self {
+        Self::Speak {
+            channel: ChannelId::default(),
+            text: text.into(),
+            replace,
+            voice,
+        }
+    }
+
+    /// `Stop` on the default channel.
+    pub fn stop(scope: Scope) -> Self {
+        Self::Stop {
+            channel: ChannelId::default(),
+            scope,
+        }
+    }
+
+    /// `Skip` on the default channel.
+    pub fn skip(unit: Unit) -> Self {
+        Self::Skip {
+            channel: ChannelId::default(),
+            unit,
+        }
+    }
+
     /// Wire names of every variant, as `#[serde(tag = "type")]` spells them.
     /// The codec uses this to tell an unknown operation (`invalid_request`)
     /// from a bad field inside a known one (`invalid_argument`).
