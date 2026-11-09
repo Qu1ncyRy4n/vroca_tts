@@ -1364,8 +1364,9 @@ atomic write verified under interruption.
 
 ### Decision 18 — First-Slice Scope Acceptance
 
-**Status:** Proposed 2026-11-08 by `agent-assistant`. Awaiting developer
-approval. Nothing below is normative until the status reads Decided.
+**Status:** Decided 2026-11-08 (developer). Proposed the same day by
+`agent-assistant`; the developer chose the **pull back** alternative over the
+proposal, so section 8 stands unchanged and the code aligns to it.
 
 **Current behavior.** Section 8 bounds the first Rust change to the three
 crates, typed operations, the legacy parser, the unbound codec, schema types,
@@ -1382,41 +1383,49 @@ accepts slices one at a time.
 
 **Alternatives considered.**
 
-- *Pull back.* Delete or feature-gate the socket, player, and CLI transport
-  code, accept slice 1 on `vroca-core` alone, then re-land the rest as slices
-  2 to 5. Honest to section 8, but it discards working tests (client,
-  daemon lifecycle) and costs a day of churn for no behavioral gain.
+- *Accept with per-crate gates.* Keep the code, replace the single first-slice
+  gate with acceptance criteria per crate, and amend DEC-6 so the structured
+  socket may stay bound with a mandatory `"v": 1`. Rejected by the developer:
+  it moves the specification to meet the code, which is the direction section
+  1.2 forbids for an Open or Proposed item.
+- *Delete outright, or park on a branch.* Rejected: the client and daemon
+  tests stop running, and slices 3 to 5 rewrite work that already exists.
 - *Ignore.* Keep going without a record. Rejected: that is precisely the drift
   section 8 exists to stop, and the spec would no longer describe the code.
 
-**Decision (proposed).** Accept that slices 1, 2, and parts of 3 to 5 landed
-together, and replace the single first-slice gate with per-crate acceptance:
+**Decision.** Section 8 remains the binding boundary. The out-of-scope code
+is **feature-gated, off by default**, and leaves first-slice acceptance:
 
-1. `vroca-core` is accepted when it meets section 8 items 2 to 6 and the
-   `rust-review.md` parser, schema, and state-machine gaps are closed. The
-   dependency budget test proves it resolves to serde only.
-2. `vroca-client` and the `vroca` CLI are accepted when Decision 5 holds:
-   local validation, typed results, `unavailable` on a missing socket with
-   the section 7.2 message, exit codes from `ErrorCode::exit_code()`.
-3. `vroca-daemon` is accepted when Decision 3, 4, and 9 rule 1 hold: framed
-   legacy reads with the section 7.8 cap, own-path-only cleanup, a real
-   shutdown message, and a `Player` trait with a fake implementation.
-4. DEC-6 is amended: the structured codec MAY be bound to `vroca-v1.sock`
-   now, provided every request carries `"v": 1` and the daemon rejects any
-   other value with `invalid_request`. The "no socket bound" test is replaced
-   by a version-rejection test.
-5. Section 8's prohibition on `mpv`, audio, GTK, `sherpa-onnx`, and
-   `~/dev/nix-config` stands until slice 6.
+1. `vroca-daemon` puts the two `UnixListener`s, the fake player, and the
+   connection threads behind a cargo feature `transport`. With default
+   features the crate builds with no socket, child process, or systemd code,
+   and a test asserts it.
+2. `vroca-client` puts the `UnixStream` transport behind the same feature
+   name. The typed API and local validation (Decision 5) stay unconditional.
+3. The `vroca` CLI keeps `journalctl` (`log`) and the socket round trip
+   behind `transport`; argument parsing and `Operation` mapping stay
+   unconditional so the CLI tests still run.
+4. DEC-6 is **not** amended. The codec stays unversioned and unbound until
+   slice 2 binds it to `vroca-v1.sock` and introduces `"v": 1` in the same
+   change. The "no socket bound" test is written against the default
+   feature set.
+5. Slices 3 to 5 each turn the gate on for the piece they accept, so the
+   feature flag is removed when the last of them lands. Until then
+   `tools/check` runs the workspace both with default features and with
+   `transport` so neither configuration rots.
 
-**Justification.** The code exists and its tests pass; the cost of the
-violation is lost traceability, not lost correctness. Per-crate acceptance
-restores traceability without deleting work, and it matches how the review was
-actually conducted. Promoting DEC-6 with a mandatory version field removes the
-only part of the overreach that would have been expensive to unwind later.
+**Justification.** The gate makes section 8 a checkable property rather than
+a promise: `cargo check -p vroca-daemon` with default features either links
+a socket or it does not. Nothing is deleted and no test stops running, which
+answers the cost the proposal was trying to avoid. Keeping DEC-6 intact
+preserves the one commitment that is expensive to unwind — a public version
+number — until the slice that was always meant to make it.
 
-**Test evidence required.** The dependency budget test; one acceptance test
-list per crate checked into `rust-review.md` with each item ticked; the
-`"v": 1` rejection test.
+**Test evidence required.** A default-features build of `vroca-daemon` and
+`vroca-client` whose resolved dependencies and source contain no
+`std::os::unix::net`, `std::process::Command`, or `journalctl`; the existing
+client and daemon tests still passing under `--features transport`; the
+DEC-6 "no socket bound" test.
 
 ---
 
@@ -1444,7 +1453,8 @@ Kokoro, VITS, Matcha, Supertonic, ZipVoice. `generate_with_config` takes a
 produced and can abort, which is the streaming and cancellation primitive R4
 and DEC-1's generation counter need.
 
-**Revised recommendation (pending developer approval).** Use the official
+**Decided 2026-11-08 (developer): the official crate, as recommended below.**
+Use the official
 crate, `shared` feature, in a dedicated `vroca-engine` crate so `vroca-core`
 stays serde-only (Decision 2) and `unsafe` stays out of our code entirely. Pin
 the crate to the nixpkgs library version (1.13.8 today; 2.0.x needs a nixpkgs
@@ -1461,9 +1471,10 @@ attempt has no retry or error state (D6).
 
 **Blocks.** Slice 4 (CLI) and slice 8 (panel).
 
-**Recommendation.** Neither client starts the daemon. Both report `unavailable`
-with the exact command to start it. Auto-start hides failures, which is how D6
-became possible.
+**Decided 2026-11-08 (developer).** Neither client starts the daemon. Both
+report `unavailable` with the exact command to start it
+(`systemctl --user start vroca` on Linux; the launchd equivalent on macOS).
+Auto-start hides failures, which is how D6 became possible.
 
 ### 7.3 Structured Socket Permissions
 
@@ -1472,8 +1483,8 @@ became possible.
 
 **Blocks.** Slice 5 (daemon lifecycle).
 
-**Recommendation.** Owner-only `0600`. The enclosing directory is already `0700`,
-so `0666` grants nothing and only misstates the boundary.
+**Decided 2026-11-08 (developer).** Owner-only `0600`. The enclosing directory
+is already `0700`, so `0666` grants nothing and only misstates the boundary.
 
 ### 7.4 Worker Count And Prefetch Depth
 
@@ -1530,9 +1541,12 @@ it is an accidental 4096 bytes with silent truncation (N6).
 
 **Blocks.** Slice 3 (parsers).
 
-**Recommendation.** An explicit limit, generous for text, with over-limit input
-producing `invalid_request` rather than truncation. The exact number needs a
-real-use estimate.
+**Decided 2026-11-08 (developer).** 64 KiB (65,536 bytes) per legacy request.
+Over-limit input MUST produce `invalid_request`, never truncation. Note the
+Python sweep chose `MAX_REQUEST = 1 << 20` (1 MiB), so during migration a
+request between 64 KiB and 1 MiB is accepted by Python and rejected by Rust;
+this is a known, intentional difference recorded in
+[`legacy-compatibility.md`](legacy-compatibility.md).
 
 ### 7.9 Error Retry Semantics
 
@@ -1566,15 +1580,16 @@ request/reply worker lane on `std::thread` with a repaint waker (the omnichan
 
 Panel and overlay remain separate processes.
 
-**Open consequence: the overlay.** egui/winit has no wlr-layer-shell binding,
-so a non-focus-stealing subtitle strip on Wayland is not available through
-eframe. Options, in order of preference: (a) keep the Python GTK overlay as the
-Linux overlay until a Rust layer-shell path exists, (b) a small winit-free
-overlay process on `smithay-client-toolkit` layer-shell drawing with a
-software rasteriser, (c) an eframe window with `always_on_top` and focus
-avoidance, accepting focus-steal risk. Decide before slice 8 starts the
-overlay; the panel does not depend on it. macOS has no layer-shell either, so
-the Mac overlay was already out of scope.
+**The overlay — decided 2026-11-08 (developer): option (a).** egui/winit has
+no wlr-layer-shell binding, so a non-focus-stealing subtitle strip on Wayland
+is not available through eframe. The Python GTK overlay remains the Linux
+overlay, reading the snapshot file the Rust daemon keeps writing (Decision 8),
+until a Rust layer-shell path exists. The alternatives considered were (b) a
+small winit-free overlay process on `smithay-client-toolkit` layer-shell with
+a software rasteriser, and (c) an eframe window with `always_on_top` and focus
+avoidance, accepting focus-steal risk; (b) remains the likely eventual path.
+The panel does not depend on this. macOS has no layer-shell either, so the
+Mac overlay was already out of scope.
 
 ### 7.11 TTS-Aware Markdown Notation
 
@@ -1614,6 +1629,10 @@ documents.
   meet [`agent-input-security.md`](agent-input-security.md).
 - Whether `python_impl/pyproject.toml` should be removed or made authoritative
   (N24), and whether the flake should stop advertising darwin shells (N25).
+- ~~`quit` exit status.~~ **Decided 2026-11-08 (developer):** `quit` exits
+  `0` after the graceful shutdown of Decision 9, and with `Restart=on-failure`
+  the user service stays stopped. `quit` means quit; `integration.md` already
+  documents it that way. Crashes exit non-zero and restart.
 
 ---
 

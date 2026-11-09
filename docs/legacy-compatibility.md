@@ -47,7 +47,7 @@ Finding identifiers (`D#`, `N#`) refer to the mismatch register in
 | Transport | Unix stream socket | Preserve for legacy clients. | — |
 | Framing | One request, one response, connection close | Preserve. | — |
 | Encoding | UTF-8 in, replacement decoding on invalid bytes | Preserve for legacy. Structured protocol MUST reject invalid UTF-8 instead. | N6 |
-| Request limit | One `recv(4096)`; longer input truncated, possibly mid-UTF-8 | Set an explicit limit; over-limit input MUST produce `invalid_request`, never truncation. Limit value is Open (`rust-spec.md` §7.8). | N6 |
+| Request limit | Python sweep: `MAX_REQUEST = 1 MiB`, over-limit replies `request too large` | Rust cap is **64 KiB** (`rust-spec.md` §7.8, decided 2026-11-08); over-limit MUST produce `invalid_request`, never truncation. Requests between 64 KiB and 1 MiB are accepted by Python and rejected by Rust — an intentional, recorded difference. | N6 |
 | Response write | `conn.send()` with the return value discarded | MUST use a full write. The libritts `catalogue` response measures **101,359 bytes** against roughly 106 KB of effective buffer — under 5% margin, shrinking as voices are added. | N5 |
 | Whitespace | `strip()` before dispatch, so `vroca say ""` becomes `unknown: say` and surrounding whitespace in text is lost | Decide explicitly; preserve interior text exactly. | N7 |
 | Invalid numerics | `float()`/`int()` raise and **terminate the daemon** | MUST become a typed error. Non-negotiable. | D8 |

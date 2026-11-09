@@ -53,23 +53,21 @@ b7485ca Adopt workspace lints, a dependency budget, exit codes, and tools/ verbs
 
 ## 4. Decisions Waiting On The Developer
 
-In order of how soon they block:
+All resolved by the developer on 2026-11-08; `rust-spec.md` carries the text.
 
-1. **Decision 18, first-slice scope.** Section 8 forbade sockets, `mpv`, and
-   systemd in the first slice; the code that landed has all three. The
-   proposal in `rust-spec.md` accepts the overreach with per-crate acceptance
-   gates and promotes the structured codec to a bound, versioned socket
-   (`"v": 1` required). Alternative is pulling the socket code back out. One
-   sentence from the developer settles it. **Nothing in slices 3 to 5 can be
-   accepted until then**, though the work itself can proceed.
-2. **§7.1 engine binding.** Research done: use the official `sherpa-onnx`
-   crate (k2-fsa), `shared` feature, `SHERPA_ONNX_LIB_DIR` pointed at the
-   nixpkgs library, pinned to the nixpkgs version (1.13.8). Needs a yes.
-3. **§7.2** start-failure message, **§7.3** socket permissions, **§7.8**
-   request size cap, **`quit` exit status.** Each is a one-line answer; the
-   recommendations are in the spec. Block slice 5 acceptance.
-4. **Overlay on Wayland** (§7.10 options a/b/c). Blocks the overlay half of
-   slice 8 only.
+1. **Decision 18** — **align to §8**, not accept. The socket, client
+   transport, fake player, and `journalctl` code go behind a `transport`
+   cargo feature, off by default; DEC-6 stays unamended (codec unversioned
+   and unbound until slice 2). Slices C–D turn the gate on per piece.
+2. **§7.1** — official `sherpa-onnx` crate, `shared`, pinned `=1.13.8`, in a
+   new `vroca-engine` crate.
+3. **§7.2** never auto-start, print the start command. **§7.3** `0600`.
+   **§7.8** 64 KiB (Python is 1 MiB — recorded difference). **`quit`** exits
+   `0`; service stays stopped.
+4. **§7.10 overlay** — option (a): keep the Python GTK overlay for now.
+
+Still open and not yet blocking: §7.4–7.7, §7.9, §7.11–7.13, and the §10.8
+questions.
 
 Decision involvement level is **interface**: API/CLI shape, service behavior,
 and UI behavior need approval before implementation. Function names, control
@@ -118,10 +116,13 @@ From `rust-review.md` §4 and §6. All inside `vroca-core`, serde only.
   §10.9 requires these shapes in the first slice even though scheduling is
   Track C.
 
-### Slice C — Daemon transport (needs Decision 18 and §7.3/§7.8)
+### Slice C — Daemon transport (DEC-18, §7.3, §7.8 decided)
 
-- Framed legacy reads: read to quiet gap or EOF with the §7.8 cap; over-limit
-  is an error, never truncation (bug 7; Python N6 semantics).
+- First: gate the existing socket, player, and `journalctl` code behind the
+  `transport` feature per DEC-18, with the default-features assertion test and
+  `tools/check` running both configurations.
+- Framed legacy reads: read to quiet gap or EOF with the 64 KiB §7.8 cap;
+  over-limit is an error, never truncation (bug 7; Python N6 semantics).
 - Clean up only paths this daemon created (bug 6, DEC-9 rule 1). Fix the
   cleanup test that passes because of over-deletion.
 - Real `Message::Shutdown`; blocking accept with shutdown by closing the
@@ -130,7 +131,8 @@ From `rust-review.md` §4 and §6. All inside `vroca-core`, serde only.
 - `Player` trait with the fake impl; health enum with a degraded state on
   player death (N4); snapshot writer with `daemon_id` on every state change
   (DEC-8).
-- `"v": 1` on the structured socket, rejection test (Decision 18 item 4).
+- Binding `vroca-v1.sock` with `"v": 1` and its rejection test stays slice 2
+  work under DEC-6 (DEC-18 did not amend it).
 
 ### Slice D — Client and CLI (needs §7.2)
 
